@@ -1,10 +1,662 @@
 package dev.boottv.launcher
 
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.OpenWith
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.navigation.NavController
+import androidx.tv.material3.Border
+import androidx.tv.material3.Card
+import androidx.tv.material3.CardDefaults
+import androidx.tv.material3.Icon
+import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
+import dev.boottv.core.ui.BootButton
+import dev.boottv.core.ui.BootColors
+import dev.boottv.core.ui.BootDialog
+import dev.boottv.core.ui.BootDimens
+import dev.boottv.core.ui.PinPadDialog
+import dev.boottv.core.ui.PinSetupDialog
+import dev.boottv.settings.BootPrefs
+import dev.boottv.settings.BootSettings
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+/** Signals from the activity to the home screen (e.g. Home key pressed while already home). */
+object HomeSignals {
+    val reset = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+}
+
+private data class PinRequest(val title: String, val message: String?, val onSuccess: () -> Unit)
+
+private enum class MoveDir { Left, Right, Up, Down }
 
 @Composable
 fun HomeScreen(nav: NavController) {
-    Text("Home")
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val settings by remember { BootPrefs.flow(context) }.collectAsState(initial = null)
+
+    var apps by remember { mutableStateOf<List<AppEntry>?>(null) }
+    var refreshTick by remember { mutableIntStateOf(0) }
+
+    // Load / reload the installed app list.
+    LaunchedEffect(refreshTick) { apps = AppRepository.loadApps(context) }
+    LifecycleResumeEffect(Unit) {
+        refreshTick++
+        onPauseOrDispose { }
+    }
+    // Live refresh on install / uninstall / update.
+    DisposableEffect(context) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(c: Context, intent: Intent) {
+                AppRepository.invalidate(intent.data?.schemeSpecificPart)
+                refreshTick++
+            }
+        }
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_PACKAGE_ADDED)
+            addAction(Intent.ACTION_PACKAGE_REMOVED)
+            addAction(Intent.ACTION_PACKAGE_CHANGED)
+            addAction(Intent.ACTION_PACKAGE_REPLACED)
+            addDataScheme("package")
+        }
+        ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_EXPORTED)
+        onDispose { runCatching { context.unregisterReceiver(receiver) } }
+    }
+
+    val s = settings ?: BootSettings()
+    val allApps = apps.orEmpty()
+    val byPkg = remember(allApps) { allApps.associateBy { it.packageName } }
+
+    // Home order: saved order first, then any new apps alphabetically (Roku puts new channels last).
+    val ordered = remember(allApps, s.order) {
+        val saved = s.order.mapNotNull { byPkg[it] }
+        val rest = allApps.filter { it.packageName !in s.order.toSet() }
+        saved + rest
+    }
+    val visible = remember(ordered, s.hidden) { ordered.filter { it.packageName !in s.hidden } }
+    val favorites = remember(byPkg, s.favorites, s.hidden) {
+        s.favorites.mapNotNull { byPkg[it] }.filter { it.packageName !in s.hidden }
+    }
+
+    // Move mode (Roku "Move channel").
+    var movingPkg by remember { mutableStateOf<String?>(null) }
+    var workingOrder by remember { mutableStateOf<List<String>?>(null) }
+    val gridApps: List<AppEntry> = workingOrder?.mapNotNull { byPkg[it] } ?: visible
+
+    // Dialogs.
+    var options by remember { mutableStateOf<Pair<AppEntry, Boolean>?>(null) }
+    var pinRequest by remember { mutableStateOf<PinRequest?>(null) }
+    var setupThen by remember { mutableStateOf<((String) -> Unit)?>(null) }
+
+    val requesters = remember { mutableMapOf<String, FocusRequester>() }
+    fun requester(key: String) = requesters.getOrPut(key) { FocusRequester() }
+    var lastFocused by rememberSaveable { mutableStateOf<String?>(null) }
+    val scroll = rememberScrollState()
+
+    fun launch(app: AppEntry) {
+        val go = {
+            if (!AppRepository.launch(context, app.packageName)) {
+                Toast.makeText(context, "Can't open ${app.label}", Toast.LENGTH_SHORT).show()
+            }
+        }
+        if (app.packageName in s.locked && s.hasPin) {
+            pinRequest = PinRequest("Enter PIN", "${app.label} is locked.") { go() }
+        } else {
+            go()
+        }
+    }
+
+    /** Runs [action] directly, or after PIN entry if the app is locked. */
+    fun guarded(app: AppEntry, action: () -> Unit) {
+        if (app.packageName in s.locked && s.hasPin) {
+            pinRequest = PinRequest("Enter PIN", "${app.label} is locked.", action)
+        } else {
+            action()
+        }
+    }
+
+    fun startMove(app: AppEntry) {
+        workingOrder = visible.map { it.packageName }
+        movingPkg = app.packageName
+    }
+
+    fun moveBy(dir: MoveDir, columns: Int) {
+        val pkg = movingPkg ?: return
+        val list = workingOrder?.toMutableList() ?: return
+        val i = list.indexOf(pkg)
+        if (i < 0) return
+        val target = when (dir) {
+            MoveDir.Left -> i - 1
+            MoveDir.Right -> i + 1
+            MoveDir.Up -> i - columns
+            MoveDir.Down -> i + columns
+        }.coerceIn(0, list.lastIndex)
+        if (target == i) return
+        list.removeAt(i)
+        list.add(target, pkg)
+        workingOrder = list
+    }
+
+    fun dropMove() {
+        val newVisible = workingOrder
+        movingPkg = null
+        workingOrder = null
+        if (newVisible != null) {
+            val hiddenTail = ordered.map { it.packageName }.filter { it !in newVisible }
+            scope.launch { BootPrefs.setOrder(context, newVisible + hiddenTail) }
+        }
+    }
+
+    fun cancelMove() {
+        movingPkg = null
+        workingOrder = null
+    }
+
+    // Keep focus on the tile being moved.
+    LaunchedEffect(workingOrder) {
+        val pkg = movingPkg ?: return@LaunchedEffect
+        runCatching { requester("grid:$pkg").requestFocus() }
+    }
+
+    // Initial focus: last focused tile (when returning), else the first tile.
+    val firstKey = favorites.firstOrNull()?.takeIf { s.showFavorites }?.let { "fav:${it.packageName}" }
+        ?: visible.firstOrNull()?.let { "grid:${it.packageName}" }
+    var focusTick by remember { mutableIntStateOf(0) }
+    var didInitialFocus by remember { mutableStateOf(false) }
+    LaunchedEffect(firstKey, focusTick) {
+        if (firstKey == null) return@LaunchedEffect
+        if (didInitialFocus && focusTick == 0) return@LaunchedEffect
+        delay(60)
+        val restore = lastFocused?.takeIf { focusTick == 0 && requesters.containsKey(it) }
+        val ok = runCatching { requester(restore ?: firstKey).requestFocus() }.isSuccess
+        if (!ok) runCatching { requester(firstKey).requestFocus() }
+        didInitialFocus = true
+    }
+
+    // Home key while already home: close everything and go back to the top.
+    LaunchedEffect(Unit) {
+        HomeSignals.reset.collect {
+            options = null
+            pinRequest = null
+            setupThen = null
+            cancelMove()
+            lastFocused = null
+            scroll.animateScrollTo(0)
+            focusTick++
+        }
+    }
+
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(BootColors.Background)
+            .verticalScroll(scroll)
+            .padding(horizontal = BootDimens.PagePaddingH, vertical = BootDimens.PagePaddingV),
+    ) {
+        HomeTopBar(movingLabel = movingPkg?.let { byPkg[it]?.label })
+        Spacer(Modifier.height(20.dp))
+
+        if (s.showFavorites && favorites.isNotEmpty() && movingPkg == null) {
+            SectionTitle("Favorites")
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(vertical = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(BootDimens.CardSpacing),
+            ) {
+                favorites.forEach { app ->
+                    key(app.packageName) {
+                        val k = "fav:${app.packageName}"
+                        AppTile(
+                            app = app,
+                            locked = app.packageName in s.locked,
+                            moving = false,
+                            modifier = Modifier
+                                .width(BootDimens.WideCardWidth)
+                                .focusRequester(requester(k))
+                                .onFocusChanged { if (it.isFocused) lastFocused = k },
+                            onClick = { launch(app) },
+                            onOptions = { options = app to true },
+                            onMoveKey = { false },
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(BootDimens.RowSpacing))
+        }
+
+        SectionTitle("Apps")
+        Spacer(Modifier.height(10.dp))
+        when {
+            apps == null -> Text("Loading apps…", color = BootColors.TextSecondary)
+            gridApps.isEmpty() -> Text(
+                "No apps to show. Hidden apps can be restored in Settings › Home screen.",
+                color = BootColors.TextSecondary,
+            )
+            else -> TileGrid(columns = s.gridColumns, spacing = BootDimens.CardSpacing) {
+                gridApps.forEach { app ->
+                    key(app.packageName) {
+                        val k = "grid:${app.packageName}"
+                        val isMoving = movingPkg == app.packageName
+                        AppTile(
+                            app = app,
+                            locked = app.packageName in s.locked,
+                            moving = isMoving,
+                            dimmed = movingPkg != null && !isMoving,
+                            modifier = Modifier
+                                .focusRequester(requester(k))
+                                .onFocusChanged { if (it.isFocused) lastFocused = k },
+                            onClick = { if (movingPkg == null) launch(app) },
+                            onOptions = { if (movingPkg == null) options = app to false },
+                            onMoveKey = { key ->
+                                if (!isMoving) return@AppTile false
+                                when (key) {
+                                    Key.DirectionLeft -> moveBy(MoveDir.Left, s.gridColumns)
+                                    Key.DirectionRight -> moveBy(MoveDir.Right, s.gridColumns)
+                                    Key.DirectionUp -> moveBy(MoveDir.Up, s.gridColumns)
+                                    Key.DirectionDown -> moveBy(MoveDir.Down, s.gridColumns)
+                                    Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> dropMove()
+                                    Key.Back, Key.Escape -> cancelMove()
+                                }
+                                true
+                            },
+                        )
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(48.dp))
+    }
+
+    // ---- Dialogs ----
+    options?.let { (app, fromFavorites) ->
+        AppOptionsDialog(
+            app = app,
+            fromFavorites = fromFavorites,
+            settings = s,
+            onDismiss = { options = null },
+            onMove = { options = null; startMove(app) },
+            onToggleFavorite = {
+                options = null
+                scope.launch { BootPrefs.setFavorite(context, app.packageName, app.packageName !in s.favorites) }
+            },
+            onHide = {
+                options = null
+                guarded(app) {
+                    scope.launch { BootPrefs.setHidden(context, app.packageName, true) }
+                    Toast.makeText(context, "${app.label} hidden. Restore it in Settings › Home screen.", Toast.LENGTH_LONG).show()
+                }
+            },
+            onToggleLock = {
+                options = null
+                val locked = app.packageName in s.locked
+                when {
+                    locked -> pinRequest = PinRequest("Unlock ${app.label}", "Enter your PIN to unlock.") {
+                        scope.launch { BootPrefs.setLocked(context, app.packageName, false) }
+                    }
+                    s.hasPin -> scope.launch { BootPrefs.setLocked(context, app.packageName, true) }
+                    else -> setupThen = { pin ->
+                        scope.launch {
+                            BootPrefs.setPin(context, pin)
+                            BootPrefs.setLocked(context, app.packageName, true)
+                        }
+                    }
+                }
+            },
+            onInfo = { options = null; AppRepository.openAppInfo(context, app.packageName) },
+            onUninstall = {
+                options = null
+                guarded(app) { AppRepository.uninstall(context, app.packageName) }
+            },
+        )
+    }
+
+    pinRequest?.let { req ->
+        PinPadDialog(
+            title = req.title,
+            message = req.message,
+            onDismiss = { pinRequest = null },
+            onComplete = { pin ->
+                if (BootPrefs.checkPin(s, pin)) {
+                    pinRequest = null
+                    req.onSuccess()
+                    true
+                } else {
+                    false
+                }
+            },
+        )
+    }
+
+    setupThen?.let { then ->
+        PinSetupDialog(
+            onDismiss = { setupThen = null },
+            onPinSet = { pin -> setupThen = null; then(pin) },
+        )
+    }
+}
+
+@Composable
+private fun SectionTitle(text: String) {
+    Text(text, style = MaterialTheme.typography.titleMedium, color = BootColors.TextSecondary)
+}
+
+@Composable
+private fun HomeTopBar(movingLabel: String?) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            "BootTV",
+            fontSize = 30.sp,
+            fontWeight = FontWeight.Black,
+            color = BootColors.Accent,
+        )
+        Spacer(Modifier.width(24.dp))
+        Text(
+            if (movingLabel != null) {
+                "Moving $movingLabel — use the arrows, OK to drop, Back to cancel"
+            } else {
+                "Hold OK or press ☰ on an app for options"
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (movingLabel != null) BootColors.TextPrimary else BootColors.TextSecondary,
+            modifier = Modifier.weight(1f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Clock()
+    }
+}
+
+@Composable
+private fun Clock() {
+    val context = LocalContext.current
+    var now by remember { mutableStateOf(Date()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            now = Date()
+            delay(1000 - (System.currentTimeMillis() % 1000) + 5)
+        }
+    }
+    val timeFormat = remember { android.text.format.DateFormat.getTimeFormat(context) }
+    val dateFormat = remember { SimpleDateFormat("EEE, MMM d", Locale.getDefault()) }
+    Column(horizontalAlignment = Alignment.End) {
+        Text(timeFormat.format(now), fontSize = 28.sp, fontWeight = FontWeight.SemiBold, color = BootColors.TextPrimary)
+        Text(dateFormat.format(now), style = MaterialTheme.typography.bodyMedium, color = BootColors.TextSecondary)
+    }
+}
+
+/** Simple grid that keeps all tiles in one parent, so keyed tiles keep focus while being reordered. */
+@Composable
+private fun TileGrid(columns: Int, spacing: Dp, content: @Composable () -> Unit) {
+    Layout(content = content, modifier = Modifier.fillMaxWidth()) { measurables, constraints ->
+        val gap = spacing.roundToPx()
+        val width = constraints.maxWidth
+        val cellW = ((width - gap * (columns - 1)) / columns).coerceAtLeast(1)
+        val cellH = cellW * 9 / 16
+        val placeables = measurables.map { it.measure(Constraints.fixed(cellW, cellH)) }
+        val rows = (placeables.size + columns - 1) / columns
+        val height = if (rows == 0) 0 else rows * cellH + (rows - 1) * gap
+        layout(width, height) {
+            placeables.forEachIndexed { i, p ->
+                val r = i / columns
+                val c = i % columns
+                p.place(c * (cellW + gap), r * (cellH + gap))
+            }
+        }
+    }
+}
+
+private val tilePalette = listOf(
+    Color(0xFF3A2D6B), Color(0xFF1F4E79), Color(0xFF1E5E4E), Color(0xFF6B2D4A),
+    Color(0xFF6B4A1E), Color(0xFF2D4A6B), Color(0xFF4A2D6B), Color(0xFF2D6B5E),
+)
+
+@Composable
+private fun AppTile(
+    app: AppEntry,
+    locked: Boolean,
+    moving: Boolean,
+    modifier: Modifier = Modifier,
+    dimmed: Boolean = false,
+    onClick: () -> Unit,
+    onOptions: () -> Unit,
+    onMoveKey: (Key) -> Boolean,
+) {
+    val context = LocalContext.current
+    var art by remember(app.packageName) { mutableStateOf<AppArt?>(null) }
+    LaunchedEffect(app.packageName) { art = AppRepository.loadArt(context, app) }
+    var focused by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(12.dp)
+
+    Card(
+        onClick = onClick,
+        onLongClick = onOptions,
+        modifier = modifier
+            .aspectRatio(16f / 9f)
+            .onFocusChanged { focused = it.isFocused }
+            .onPreviewKeyEvent { ev ->
+                if (moving) {
+                    // Act on key-down for arrows, key-up for OK/Back so the release doesn't re-trigger.
+                    val isConfirm = ev.key == Key.DirectionCenter || ev.key == Key.Enter ||
+                        ev.key == Key.NumPadEnter || ev.key == Key.Back || ev.key == Key.Escape
+                    when {
+                        isConfirm && ev.type == KeyEventType.KeyUp -> onMoveKey(ev.key)
+                        isConfirm -> true
+                        ev.type == KeyEventType.KeyDown -> onMoveKey(ev.key)
+                        else -> true
+                    }
+                } else if (ev.key == Key.Menu) {
+                    if (ev.type == KeyEventType.KeyUp) onOptions()
+                    true
+                } else {
+                    false
+                }
+            },
+        shape = CardDefaults.shape(shape),
+        scale = CardDefaults.scale(focusedScale = 1.08f),
+        border = CardDefaults.border(
+            border = if (moving) Border(BorderStroke(3.dp, BootColors.Accent), shape = shape) else Border.None,
+            focusedBorder = Border(BorderStroke(3.dp, if (moving) Color.White else BootColors.Accent), shape = shape),
+        ),
+        colors = CardDefaults.colors(containerColor = BootColors.Surface),
+    ) {
+        Box(Modifier.fillMaxSize()) {
+            val a = art
+            if (a != null && a.isBanner) {
+                Image(a.bitmap, contentDescription = app.label, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            } else {
+                val bg = tilePalette[(app.packageName.hashCode() and 0x7fffffff) % tilePalette.size]
+                Column(
+                    Modifier
+                        .fillMaxSize()
+                        .background(Brush.verticalGradient(listOf(bg, bg.copy(alpha = 0.75f))))
+                        .padding(8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    if (a != null) {
+                        Image(a.bitmap, contentDescription = null, modifier = Modifier.weight(1f).aspectRatio(1f))
+                    } else {
+                        Icon(Icons.Filled.Apps, contentDescription = null, tint = Color.White, modifier = Modifier.weight(1f).aspectRatio(1f))
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        app.label,
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+            }
+            if (a != null && a.isBanner && focused) {
+                // Banner tiles have no visible label; show it on focus.
+                Box(
+                    Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth()
+                        .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xCC000000))))
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                ) {
+                    Text(app.label, color = Color.White, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+            if (locked) {
+                Box(
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(6.dp)
+                        .size(26.dp)
+                        .background(Color(0xAA000000), CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Filled.Lock, contentDescription = "Locked", tint = Color.White, modifier = Modifier.size(16.dp))
+                }
+            }
+            if (moving) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(Color(0x55000000)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Filled.OpenWith, contentDescription = "Moving", tint = Color.White, modifier = Modifier.size(40.dp))
+                }
+            }
+            if (dimmed) {
+                Box(Modifier.fillMaxSize().background(Color(0x66000000)))
+            }
+        }
+    }
+}
+
+@Composable
+private fun AppOptionsDialog(
+    app: AppEntry,
+    fromFavorites: Boolean,
+    settings: BootSettings,
+    onDismiss: () -> Unit,
+    onMove: () -> Unit,
+    onToggleFavorite: () -> Unit,
+    onHide: () -> Unit,
+    onToggleLock: () -> Unit,
+    onInfo: () -> Unit,
+    onUninstall: () -> Unit,
+) {
+    val first = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        delay(50)
+        runCatching { first.requestFocus() }
+    }
+    val isFavorite = app.packageName in settings.favorites
+    val isLocked = app.packageName in settings.locked
+    BootDialog(onDismiss = onDismiss, title = app.label, subtitle = app.packageName) {
+        val items = buildList<Triple<String, androidx.compose.ui.graphics.vector.ImageVector, () -> Unit>> {
+            if (!fromFavorites) add(Triple("Move app", Icons.Filled.OpenWith, onMove))
+            add(
+                Triple(
+                    if (isFavorite) "Remove from favorites" else "Add to favorites",
+                    if (isFavorite) Icons.Filled.StarBorder else Icons.Filled.Star,
+                    onToggleFavorite,
+                ),
+            )
+            add(Triple("Hide from home", Icons.Filled.VisibilityOff, onHide))
+            add(
+                Triple(
+                    if (isLocked) "Unlock (remove PIN lock)" else if (settings.hasPin) "Lock with PIN" else "Lock with PIN (set up PIN)",
+                    if (isLocked) Icons.Filled.LockOpen else Icons.Filled.Lock,
+                    onToggleLock,
+                ),
+            )
+            add(Triple("App info", Icons.Filled.Info, onInfo))
+            if (!app.isSystem) add(Triple("Uninstall", Icons.Filled.Delete, onUninstall))
+        }
+        items.forEachIndexed { i, (label, icon, action) ->
+            BootButton(
+                text = label,
+                icon = icon,
+                onClick = action,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(if (i == 0) Modifier.focusRequester(first) else Modifier),
+            )
+        }
+    }
 }

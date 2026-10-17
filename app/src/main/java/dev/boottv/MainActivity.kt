@@ -1,31 +1,157 @@
 package dev.boottv
 
+import android.content.Intent
 import android.os.Bundle
+import android.view.KeyEvent
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRestorer
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.unit.dp
+import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import dev.boottv.browser.browserGraph
 import dev.boottv.core.Routes
+import dev.boottv.core.ui.BootColors
+import dev.boottv.core.ui.BootDimens
+import dev.boottv.core.ui.BootMenuItems
+import dev.boottv.core.ui.BootTheme
+import dev.boottv.core.ui.SideMenu
 import dev.boottv.jellyfin.jellyfinGraph
 import dev.boottv.launcher.HomeScreen
+import dev.boottv.launcher.HomeSignals
 import dev.boottv.livetv.liveTvGraph
 import dev.boottv.search.SearchScreen
 import dev.boottv.settings.SettingsScreen
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 
 class MainActivity : ComponentActivity() {
+
+    /** Top-level routes requested from outside Compose (Home key, Search key). */
+    private val navRequests = MutableSharedFlow<String>(extraBufferCapacity = 4)
+
+    @OptIn(ExperimentalComposeUiApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            val nav = rememberNavController()
-            NavHost(nav, startDestination = Routes.HOME) {
-                composable(Routes.HOME) { HomeScreen(nav) }
-                composable(Routes.SEARCH) { SearchScreen(nav) }
-                composable(Routes.SETTINGS) { SettingsScreen(nav) }
-                jellyfinGraph(nav)
-                liveTvGraph(nav)
-                browserGraph(nav)
+            BootTheme {
+                val nav = rememberNavController()
+                val entry by nav.currentBackStackEntryAsState()
+                val route = entry?.destination?.route
+                val topLevel = topLevelOf(route)
+                val contentFocus = remember { FocusRequester() }
+                var focusContentTick by remember { mutableIntStateOf(0) }
+
+                LaunchedEffect(Unit) {
+                    navRequests.collect { target ->
+                        if (target == Routes.HOME) {
+                            if (!nav.popBackStack(Routes.HOME, inclusive = false)) nav.navigateTopLevel(Routes.HOME)
+                            HomeSignals.reset.tryEmit(Unit)
+                        } else {
+                            nav.navigateTopLevel(target)
+                        }
+                        focusContentTick++
+                    }
+                }
+                LaunchedEffect(focusContentTick) {
+                    if (focusContentTick == 0) return@LaunchedEffect
+                    delay(300) // let the destination compose first
+                    runCatching { contentFocus.requestFocus() }
+                }
+
+                // A launcher must never close on Back from Home.
+                BackHandler(enabled = route == Routes.HOME) { HomeSignals.reset.tryEmit(Unit) }
+
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(BootColors.Background),
+                ) {
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .padding(start = if (topLevel != null) BootDimens.SideMenuCollapsed else 0.dp)
+                            .focusRequester(contentFocus)
+                            .focusRestorer()
+                            .focusGroup(),
+                    ) {
+                        NavHost(nav, startDestination = Routes.HOME) {
+                            composable(Routes.HOME) { HomeScreen(nav) }
+                            composable(Routes.SEARCH) { SearchScreen(nav) }
+                            composable(Routes.SETTINGS) { SettingsScreen(nav) }
+                            jellyfinGraph(nav)
+                            liveTvGraph(nav)
+                            browserGraph(nav)
+                        }
+                    }
+                    // Side menu only on top-level screens; detail/player screens are full-screen.
+                    if (topLevel != null) {
+                        SideMenu(
+                            currentRoute = topLevel,
+                            onSelect = { target ->
+                                if (target != topLevel) nav.navigateTopLevel(target)
+                                focusContentTick++
+                            },
+                            modifier = Modifier.align(Alignment.CenterStart),
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        // Home button pressed while BootTV is already the foreground home app.
+        if (intent.action == Intent.ACTION_MAIN &&
+            (intent.hasCategory(Intent.CATEGORY_HOME) || intent.hasCategory(Intent.CATEGORY_LEANBACK_LAUNCHER) ||
+                intent.hasCategory(Intent.CATEGORY_LAUNCHER))
+        ) {
+            navRequests.tryEmit(Routes.HOME)
+        }
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.keyCode == KeyEvent.KEYCODE_SEARCH) {
+            if (event.action == KeyEvent.ACTION_UP) navRequests.tryEmit(Routes.SEARCH)
+            return true
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
+    private companion object {
+        private val topLevelRoutes = BootMenuItems.map { it.route }.toSet()
+
+        /** The top-level route for [route] if it is one of the side-menu destinations, else null. */
+        fun topLevelOf(route: String?): String? {
+            val base = route?.substringBefore('?') ?: return Routes.HOME
+            return base.takeIf { it in topLevelRoutes }
+        }
+
+        fun NavHostController.navigateTopLevel(target: String) {
+            navigate(target) {
+                popUpTo(Routes.HOME) { saveState = true }
+                launchSingleTop = true
+                restoreState = true
             }
         }
     }
