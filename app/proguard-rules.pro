@@ -1,0 +1,5 @@
+-keepattributes *Annotation*, InnerClasses
+-keep,includedescriptorclasses class dev.boottv.**$$serializer { *; }
+-keepclassmembers class dev.boottv.** { *** Companion; }
+-keepclasseswithmembers class dev.boottv.** { kotlinx.serialization.KSerializer serializer(...); }
+-dontwarn org.slf4j.**

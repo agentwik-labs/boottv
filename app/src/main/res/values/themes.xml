@@ -1,0 +1,9 @@
+<resources>
+    <style name="Theme.BootTV" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/background</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowFullscreen">true</item>
+    </style>
+    <color name="background">#0B0B14</color>
+    <color name="accent">#7B5CFF</color>
+</resources>
