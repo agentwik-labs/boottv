@@ -58,6 +58,7 @@ class MainActivity : ComponentActivity() {
                 val entry by nav.currentBackStackEntryAsState()
                 val route = entry?.destination?.route
                 val topLevel = topLevelOf(route)
+                val showMenu = !isFullScreen(route)
                 val contentFocus = remember { FocusRequester() }
                 var focusContentTick by remember { mutableIntStateOf(0) }
 
@@ -89,7 +90,7 @@ class MainActivity : ComponentActivity() {
                     Box(
                         Modifier
                             .fillMaxSize()
-                            .padding(start = if (topLevel != null) BootDimens.SideMenuCollapsed else 0.dp)
+                            .padding(start = if (showMenu) BootDimens.SideMenuCollapsed else 0.dp)
                             .focusRequester(contentFocus)
                             .focusRestorer()
                             .focusGroup(),
@@ -103,12 +104,17 @@ class MainActivity : ComponentActivity() {
                             browserGraph(nav)
                         }
                     }
-                    // Side menu only on top-level screens; detail/player screens are full-screen.
-                    if (topLevel != null) {
+                    // Side menu everywhere except full-screen players.
+                    if (showMenu) {
                         SideMenu(
                             currentRoute = topLevel,
                             onSelect = { target ->
-                                if (target != topLevel) nav.navigateTopLevel(target)
+                                when {
+                                    target != topLevel -> nav.navigateTopLevel(target)
+                                    // On a nested screen of this section: go back to its root.
+                                    route?.substringBefore('?') != target.substringBefore('?') ->
+                                        if (!nav.popBackStack(target, inclusive = false)) nav.navigateTopLevel(target)
+                                }
                                 focusContentTick++
                             },
                             modifier = Modifier.align(Alignment.CenterStart),
@@ -141,11 +147,15 @@ class MainActivity : ComponentActivity() {
     private companion object {
         private val topLevelRoutes = BootMenuItems.map { it.route }.toSet()
 
-        /** The top-level route for [route] if it is one of the side-menu destinations, else null. */
+        /** The side-menu destination that [route] belongs to (prefix match), e.g. "media/detail/{id}" -> "media". */
         fun topLevelOf(route: String?): String? {
             val base = route?.substringBefore('?') ?: return Routes.HOME
-            return base.takeIf { it in topLevelRoutes }
+            return topLevelRoutes.firstOrNull { base == it || base.startsWith("$it/") }
         }
+
+        /** Full-screen players: no side menu at all (not composed, never takes focus). */
+        fun isFullScreen(route: String?): Boolean =
+            route != null && (route.startsWith("media/play") || route.startsWith("live/play"))
 
         fun NavHostController.navigateTopLevel(target: String) {
             navigate(target) {
