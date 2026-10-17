@@ -239,7 +239,15 @@ private fun Guide(state: LiveState, nav: NavController) {
     var gridFocused by remember { mutableStateOf(false) }
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = (initialRow - 1).coerceAtLeast(0))
     var visibleRows by remember { mutableIntStateOf(5) }
-    LaunchedEffect(Unit) { runCatching { gridFocus.requestFocus() } }
+    // The grid can appear after a cold-start load while focus sits elsewhere (e.g. the side menu):
+    // keep asking until it is actually attached and focused.
+    LaunchedEffect(Unit) {
+        repeat(20) {
+            if (gridFocused) return@LaunchedEffect
+            runCatching { gridFocus.requestFocus() }
+            delay(100)
+        }
+    }
 
     // Keep the selected row on screen.
     LaunchedEffect(row, filtered) {

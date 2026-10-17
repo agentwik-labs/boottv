@@ -15,11 +15,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
@@ -61,6 +65,9 @@ class MainActivity : ComponentActivity() {
                 val showMenu = !isFullScreen(route)
                 val contentFocus = remember { FocusRequester() }
                 var focusContentTick by remember { mutableIntStateOf(0) }
+                var menuHasFocus by remember { mutableStateOf(false) }
+                var contentHasFocus by remember { mutableStateOf(false) }
+                val focusManager = LocalFocusManager.current
 
                 LaunchedEffect(Unit) {
                     navRequests.collect { target ->
@@ -75,8 +82,15 @@ class MainActivity : ComponentActivity() {
                 }
                 LaunchedEffect(focusContentTick) {
                     if (focusContentTick == 0) return@LaunchedEffect
-                    delay(300) // let the destination compose first
-                    runCatching { contentFocus.requestFocus() }
+                    // Like pressing Right on the remote: hand focus from the rail to the new screen.
+                    // The destination animates in, so retry until the content area really holds focus.
+                    repeat(14) {
+                        delay(150)
+                        if (contentHasFocus) return@LaunchedEffect
+                        if (!(menuHasFocus && focusManager.moveFocus(FocusDirection.Right))) {
+                            runCatching { contentFocus.requestFocus() }
+                        }
+                    }
                 }
 
                 // A launcher must never close on Back from Home.
@@ -91,6 +105,7 @@ class MainActivity : ComponentActivity() {
                         Modifier
                             .fillMaxSize()
                             .padding(start = if (showMenu) BootDimens.SideMenuCollapsed else 0.dp)
+                            .onFocusChanged { contentHasFocus = it.hasFocus }
                             .focusRequester(contentFocus)
                             .focusRestorer()
                             .focusGroup(),
@@ -117,7 +132,9 @@ class MainActivity : ComponentActivity() {
                                 }
                                 focusContentTick++
                             },
-                            modifier = Modifier.align(Alignment.CenterStart),
+                            modifier = Modifier
+                                .align(Alignment.CenterStart)
+                                .onFocusChanged { menuHasFocus = it.hasFocus },
                         )
                     }
                 }
