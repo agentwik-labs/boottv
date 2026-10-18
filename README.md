@@ -19,7 +19,7 @@ apps (Netflix, YouTube, Prime Video, Disney+, ...) keep working as normal apps.
 | Web browsing | Built-in TV browser with **ad and tracker blocking** |
 | — | **Web apps**: pin any website to Home as an app tile (Add website, or Add to Home in the browser) |
 | — | **Cartoons & Anime** row of free live channels on Home |
-| — | **Free Movies**: public-domain films and cartoons from the Internet Archive, with search |
+| — | **Free Movies**: public-domain films and cartoons from the Internet Archive, with search, and downloads for offline viewing (Archive's own torrents only) |
 | Screensaver | Built-in screensaver (clock/photo), no ads |
 | Parental controls | **Parental PIN** for locked apps and settings |
 | Settings | Theme, rows, apps, live TV sources, My Media server, PIN |

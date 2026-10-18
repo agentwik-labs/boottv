@@ -29,6 +29,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -67,6 +70,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import android.net.Uri
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -143,6 +147,7 @@ private object FreeCache {
 }
 
 private val CardShape = RoundedCornerShape(12.dp)
+private val DownloadedShelf = ArchiveShelf("Downloaded · plays offline", "_downloaded")
 
 // ---------------------------------------------------------------------------- browse
 
@@ -164,10 +169,12 @@ fun FreeMoviesScreen(nav: NavController) {
         loading = false
     }
 
-    val shelves = ArchiveShelves.mapNotNull { s -> FreeCache.shelves[s.collection]?.takeIf { it.isNotEmpty() }?.let { s to it } }
+    val saved = ArchiveDownloads.items.values.filter { it.done }.map { ArchiveItem(it.id, it.title, it.year) }
+    val shelves = listOfNotNull(saved.takeIf { it.isNotEmpty() }?.let { DownloadedShelf to it }) +
+        ArchiveShelves.mapNotNull { s -> FreeCache.shelves[s.collection]?.takeIf { it.isNotEmpty() }?.let { s to it } }
     val error = FreeCache.error
     when {
-        loading -> LoadingMessage("Loading free movies…")
+        loading && saved.isEmpty() -> LoadingMessage("Loading free movies…")
         shelves.isEmpty() && error != null -> CenteredMessage("Free Movies", error) { fr ->
             JfButton("Try again", Icons.Filled.Replay, primary = true, modifier = Modifier.focusRequester(fr), onClick = { reload++ })
         }
@@ -180,8 +187,10 @@ fun FreeMoviesScreen(nav: NavController) {
 private fun FreeBrowse(nav: NavController, shelves: List<Pair<ArchiveShelf, List<ArchiveItem>>>) {
     var focused by remember { mutableStateOf(shelves.first().second.first()) }
     val first = remember { FocusRequester() }
+    var anyCardFocused by remember { mutableStateOf(false) }
+    // Retry until a card really has focus: this screen can appear while the side menu is still closing and holding it.
     LaunchedEffect(Unit) {
-        repeat(10) { delay(80); if (runCatching { first.requestFocus() }.isSuccess) return@LaunchedEffect }
+        repeat(15) { delay(100); if (anyCardFocused) return@LaunchedEffect; runCatching { first.requestFocus() } }
     }
 
     Box(Modifier.fillMaxSize().background(BootColors.Background)) {
@@ -227,7 +236,7 @@ private fun FreeBrowse(nav: NavController, shelves: List<Pair<ArchiveShelf, List
                                 ArchiveCard(
                                     item,
                                     modifier = if (shelf == shelves.first().first && item == items.first()) Modifier.focusRequester(first) else Modifier,
-                                    onFocused = { focused = item },
+                                    onFocused = { focused = item; anyCardFocused = true },
                                     onClick = { nav.navigate(freeDetailRoute(item.id)) },
                                 )
                             }
@@ -268,7 +277,12 @@ fun FreeDetailScreen(nav: NavController, id: String) {
         error = null
         runCatching { ArchiveClient.details(id) }
             .onSuccess { details = it }
-            .onFailure { error = it.message ?: "Couldn't load this title." }
+            .onFailure { e ->
+                // Offline but saved: show what we know.
+                val saved = ArchiveDownloads.items[id]?.takeIf { it.done }
+                if (saved != null) details = ArchiveDetails(ArchiveItem(id, saved.title, saved.year), null, null, null, "Saved on this device", null, null, null, null)
+                else error = e.message ?: "Couldn't load this title."
+            }
     }
     val d = details
     when {
@@ -302,17 +316,59 @@ private fun FreeDetail(nav: NavController, d: ArchiveDetails) {
                 Text(it, style = MaterialTheme.typography.bodyLarge, color = BootColors.TextPrimary.copy(alpha = 0.88f), maxLines = 6, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 720.dp))
             }
             Spacer(Modifier.height(8.dp))
+            val local = ArchiveDownloads.items[d.item.id]?.done == true
+            val download = ArchiveDownloads.states[d.item.id]
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (d.videoUrl != null) {
+                if (d.videoUrl != null || local) {
                     JfButton("Play", Icons.Filled.PlayArrow, primary = true, modifier = Modifier.focusRequester(play), onClick = { nav.navigate(freePlayRoute(d.item.id)) })
                 } else {
                     Text("No streamable video for this title.", color = BootColors.TextSecondary)
                 }
+                // One button whose label follows the download, so focus stays put as it changes.
+                val canDownload = d.torrentUrl != null && d.downloadUrl != null
+                if (local || download is DownloadState.Running || canDownload) {
+                    val (label, icon) = when {
+                        local -> "Delete download" to Icons.Filled.Delete
+                        download is DownloadState.Running -> "Cancel download" to Icons.Filled.Close
+                        else -> "Download" to Icons.Filled.Download
+                    }
+                    JfButton(label, icon, onClick = {
+                        if (local || download is DownloadState.Running) ArchiveDownloads.cancelOrDelete(d.item.id) else ArchiveDownloads.download(d)
+                    })
+                }
                 JfButton("Back", Icons.AutoMirrored.Filled.ArrowBack, onClick = { nav.popBackStack() })
             }
+            DownloadStatus(local, download)
             Text("From the Internet Archive (archive.org), free and legal to watch.", style = MaterialTheme.typography.bodySmall, color = BootColors.TextSecondary)
         }
     }
+}
+
+@Composable
+private fun DownloadStatus(local: Boolean, state: DownloadState?) {
+    when {
+        local -> Text("Saved on this device · plays without internet", style = MaterialTheme.typography.bodyMedium, color = Color(0xFF5BD68A))
+        state is DownloadState.Running -> Column(Modifier.widthIn(max = 520.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            val label = when {
+                state.checking && state.progress == 0f -> "Starting download…"
+                state.checking -> "Finishing ${(state.progress * 100).toInt()}%…"
+                else -> "Downloading ${(state.progress * 100).toInt()}%  ·  ${formatRate(state.bytesPerSec)}  ·  " +
+                    if (state.peers == 0) "from archive.org" else "archive.org + ${state.peers} peer${if (state.peers == 1) "" else "s"}"
+            }
+            Text(label, style = MaterialTheme.typography.bodyMedium, color = BootColors.TextPrimary)
+            Box(Modifier.fillMaxWidth().height(6.dp).background(Color(0x33FFFFFF), RoundedCornerShape(3.dp))) {
+                Box(Modifier.fillMaxHeight().fillMaxWidth(state.progress.coerceIn(0f, 1f)).background(BootColors.Accent, RoundedCornerShape(3.dp)))
+            }
+            Text("Keeps going while you watch other things.", style = MaterialTheme.typography.bodySmall, color = BootColors.TextSecondary)
+        }
+        state is DownloadState.Failed -> Text("Download failed: ${state.message}", style = MaterialTheme.typography.bodyMedium, color = BootColors.Live)
+    }
+}
+
+private fun formatRate(bps: Long): String = when {
+    bps >= 1_000_000 -> "%.1f MB/s".format(bps / 1_000_000.0)
+    bps >= 1_000 -> "${bps / 1_000} KB/s"
+    else -> "$bps B/s"
 }
 
 // ---------------------------------------------------------------------------- player
@@ -345,6 +401,15 @@ fun FreePlayerScreen(nav: NavController, id: String) {
         onDispose { player.removeListener(listener); player.release() }
     }
     LaunchedEffect(id) {
+        val local = ArchiveDownloads.localFile(id)
+        if (local != null) {
+            val saved = ArchiveDownloads.items.getValue(id)
+            details = ArchiveDetails(ArchiveItem(id, saved.title, saved.year), null, null, null, "Saved on this device", null, null, null, null)
+            player.setMediaItem(MediaItem.fromUri(Uri.fromFile(local)))
+            player.prepare()
+            player.playWhenReady = true
+            return@LaunchedEffect
+        }
         runCatching { ArchiveClient.details(id) }
             .onSuccess { d ->
                 details = d

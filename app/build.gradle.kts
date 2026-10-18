@@ -32,6 +32,8 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true; buildConfig = true }
+    // Compress the torrent library in the APK (stored uncompressed it doubles the download size).
+    packaging { jniLibs { useLegacyPackaging = true } }
 }
 
 dependencies {
@@ -56,6 +58,10 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer-dash:1.4.1")
     implementation("androidx.media3:media3-ui:1.4.1")
     implementation("androidx.webkit:webkit:1.12.1")
+    // Free Movies offline copies (archive.org's own torrents only). ARM builds cover real sticks and the Mac emulator.
+    implementation("org.libtorrent4j:libtorrent4j:2.1.0-39")
+    implementation("org.libtorrent4j:libtorrent4j-android-arm64:2.1.0-39")
+    implementation("org.libtorrent4j:libtorrent4j-android-arm:2.1.0-39")
     debugImplementation("androidx.compose.ui:ui-tooling")
     testImplementation("junit:junit:4.13.2")
 }

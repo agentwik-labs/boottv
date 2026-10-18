@@ -32,6 +32,9 @@ data class ArchiveDetails(
     val license: String,
     /** Best MP4 to stream (H.264 when available). */
     val videoUrl: String?,
+    /** Smaller full-length MP4 (up to 480p) to save to the device. */
+    val downloadUrl: String?,
+    val downloadMd5: String?,
     /** The Archive's own BitTorrent file for this item. */
     val torrentUrl: String?,
 )
@@ -106,6 +109,9 @@ object ArchiveClient {
         val mp4 = full.filter { height(it) in 1..720 }.maxByOrNull { height(it) }
             ?: full.filter { height(it) > 720 }.minByOrNull { height(it) }
             ?: full.maxByOrNull { it.str("size")?.toLongOrNull() ?: 0L }
+        // Saving to a stick with little storage: up to 480p, else the smallest full-length file.
+        val small = full.filter { height(it) in 1..480 }.maxByOrNull { height(it) }
+            ?: full.minByOrNull { it.str("size")?.toLongOrNull() ?: Long.MAX_VALUE }
         val torrent = file { it.str("format") == "Archive BitTorrent" }.firstOrNull()
         fun download(f: JsonObject?) = f?.str("name")?.let { "https://archive.org/download/${Uri.encode(id)}/${Uri.encode(it, "/")}" }
         val description = meta.str("description")?.let {
@@ -124,6 +130,8 @@ object ArchiveClient {
                 }
             },
             videoUrl = download(mp4),
+            downloadUrl = download(small),
+            downloadMd5 = small?.str("md5"),
             torrentUrl = download(torrent),
         )
     }
