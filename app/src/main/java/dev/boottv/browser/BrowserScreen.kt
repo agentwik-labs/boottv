@@ -1,5 +1,10 @@
 package dev.boottv.browser
 
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import android.text.format.DateUtils
 import android.view.ViewGroup
 import androidx.activity.compose.BackHandler
@@ -304,6 +309,16 @@ private fun Toolbar(state: BrowserState, isBookmarked: Boolean) {
                         modifier = Modifier
                             .fillMaxSize()
                             .focusRequester(urlFieldFocus)
+                            // With the keyboard closed, Up/Down/Back cancel editing instead of trapping focus.
+                            .onPreviewKeyEvent { e ->
+                                if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                                when (e.key) {
+                                    Key.DirectionDown, Key.DirectionUp, Key.Back, Key.Escape -> {
+                                        keyboard?.hide(); state.editingUrl = false; true
+                                    }
+                                    else -> false
+                                }
+                            }
                             .background(BootColors.SurfaceRaised, RoundedCornerShape(22.dp))
                             .border(BorderStroke(2.dp, BootColors.Accent), RoundedCornerShape(22.dp))
                             .padding(horizontal = 18.dp, vertical = 10.dp),

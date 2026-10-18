@@ -1,5 +1,12 @@
 package dev.boottv.jellyfin
 
+import androidx.compose.foundation.focusGroup
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -135,6 +142,16 @@ internal fun TvTextField(
                     modifier = Modifier
                         .fillMaxWidth()
                         .focusRequester(fieldFocus)
+                        // Once the keyboard is closed, Up/Down/Back must leave the field like any other control.
+                        .onPreviewKeyEvent { e ->
+                            if (!editing || e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                            when (e.key) {
+                                Key.DirectionDown -> { finish(true); true }
+                                Key.DirectionUp -> { finish(false); focusManager.moveFocus(FocusDirection.Up); true }
+                                Key.Back, Key.Escape -> { finish(false); true }
+                                else -> false
+                            }
+                        }
                         .focusProperties { canFocus = editing }
                         .onFocusChanged { if (!it.isFocused && editing) editing = false },
                 )
@@ -166,6 +183,20 @@ internal fun JellyfinSettingsContent() {
     var quickConnectAvailable by remember { mutableStateOf(false) }
     var qcCode by remember { mutableStateOf<String?>(null) }
     var qcSecret by remember { mutableStateOf<String?>(null) }
+
+    // When the step changes (connected, signed in, Quick Connect...), the control that had focus
+    // disappears; put focus on the new step's first control instead of losing it to the category list.
+    val stepFocus = remember { FocusRequester() }
+    val signInFocus = remember { FocusRequester() }
+    val signedIn = session != null
+    var stepChanges by remember { mutableIntStateOf(0) }
+    LaunchedEffect(step, signedIn) {
+        if (stepChanges++ == 0) return@LaunchedEffect
+        repeat(10) {
+            delay(80)
+            if (runCatching { stepFocus.requestFocus() }.isSuccess) return@LaunchedEffect
+        }
+    }
 
     LaunchedEffect(lastServer) {
         if (serverInput.isEmpty() && !lastServer.isNullOrBlank()) serverInput = lastServer!!
@@ -251,7 +282,7 @@ internal fun JellyfinSettingsContent() {
                     Text("Signed in as ${s.userName}", style = MaterialTheme.typography.bodyMedium, color = BootColors.TextSecondary)
                 }
             }
-            JfButton("Sign out", Icons.AutoMirrored.Filled.Logout, onClick = {
+            JfButton("Sign out", Icons.AutoMirrored.Filled.Logout, modifier = Modifier.focusRequester(stepFocus), onClick = {
                 scope.launch { JellyfinStore.signOut(); step = SetupStep.Server }
             })
             return@Column
@@ -299,6 +330,7 @@ internal fun JellyfinSettingsContent() {
                     value = serverInput,
                     onValueChange = { serverInput = it },
                     label = "Server address",
+                    modifier = Modifier.focusRequester(stepFocus),
                     placeholder = "192.168.1.20:8096",
                     keyboardType = KeyboardType.Uri,
                     imeAction = ImeAction.Go,
@@ -309,13 +341,18 @@ internal fun JellyfinSettingsContent() {
 
             SetupStep.Login -> {
                 Text("Server: ${serverName ?: server}", color = BootColors.TextPrimary, style = MaterialTheme.typography.titleMedium)
-                TvTextField(value = username, onValueChange = { username = it }, label = "Username", placeholder = "Your Jellyfin user")
+                TvTextField(value = username, onValueChange = { username = it }, label = "Username", placeholder = "Your Jellyfin user",
+                    modifier = Modifier.focusRequester(stepFocus))
                 TvTextField(
                     value = password, onValueChange = { password = it }, label = "Password", password = true,
                     placeholder = "Leave empty if none", imeAction = ImeAction.Done,
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    JfButton("Sign in", Icons.AutoMirrored.Filled.Login, primary = true, enabled = !busy && username.isNotBlank(), onClick = {
+                // Moving down into this row lands on Sign in, not whichever button is geometrically closest.
+                Row(
+                    Modifier.focusProperties { enter = { signInFocus } }.focusGroup(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    JfButton("Sign in", Icons.AutoMirrored.Filled.Login, modifier = Modifier.focusRequester(signInFocus), primary = true, enabled = !busy && username.isNotBlank(), onClick = {
                         val url = server ?: return@JfButton
                         scope.launch {
                             busy = true; error = null; status = "Signing in…"
@@ -358,7 +395,7 @@ internal fun JellyfinSettingsContent() {
                     Text(qcCode ?: "------", fontSize = 48.sp, fontWeight = FontWeight.Bold, color = Color.White, letterSpacing = 8.sp)
                 }
                 Text("Waiting for approval…", color = BootColors.TextSecondary, style = MaterialTheme.typography.bodyMedium)
-                JfButton("Cancel", null, onClick = { step = SetupStep.Login; qcSecret = null; qcCode = null })
+                JfButton("Cancel", null, modifier = Modifier.focusRequester(stepFocus), onClick = { step = SetupStep.Login; qcSecret = null; qcCode = null })
             }
         }
 

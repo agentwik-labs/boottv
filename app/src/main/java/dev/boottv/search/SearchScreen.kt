@@ -1,5 +1,9 @@
 package dev.boottv.search
 
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.key
 import android.content.Context
 import android.content.Intent
 import android.graphics.drawable.Drawable
@@ -318,6 +322,7 @@ private fun QueryBox(
         val focus = remember { FocusRequester() }
         val keyboard = LocalSoftwareKeyboardController.current
         var hadFocus by remember { mutableStateOf(false) }
+        val focusManager = LocalFocusManager.current
         BackHandler { keyboard?.hide(); onDone() }
         LaunchedEffect(Unit) {
             delay(50)
@@ -339,6 +344,15 @@ private fun QueryBox(
                 .fillMaxWidth()
                 .height(52.dp)
                 .focusRequester(focus)
+                // With the keyboard closed, Up/Down leave the field (losing focus ends editing).
+                .onPreviewKeyEvent { e ->
+                    if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                    when (e.key) {
+                        Key.DirectionDown -> { keyboard?.hide(); focusManager.moveFocus(FocusDirection.Down) || run { onDone(); true } }
+                        Key.DirectionUp -> { keyboard?.hide(); focusManager.moveFocus(FocusDirection.Up) || run { onDone(); true } }
+                        else -> false
+                    }
+                }
                 .onFocusChanged {
                     if (it.isFocused) hadFocus = true else if (hadFocus) onDone()
                 }
