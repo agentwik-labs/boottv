@@ -341,6 +341,20 @@ fun HomeScreen(nav: NavController) {
                 Spacer(Modifier.height(BootDimens.RowSpacing))
             }
         }
+        // Free legal apps not installed yet; once installed they show up in the Apps grid instead.
+        val toInstall = remember(allApps) {
+            val installed = allApps.map { it.packageName }.toSet()
+            FreeApps.filter { it.pkg !in installed }
+        }
+        if (movingPkg == null && apps != null && toInstall.isNotEmpty()) {
+            FreeAppsRow(
+                apps = toInstall,
+                requester = ::requester,
+                onFocused = { k, f -> lastFocused = k; if (showFeed) featured = f },
+                onOpen = { openStoreListing(context, it) },
+            )
+            Spacer(Modifier.height(BootDimens.RowSpacing))
+        }
 
         if (s.showFavorites && favorites.isNotEmpty() && movingPkg == null) {
             SectionTitle("Favorites")

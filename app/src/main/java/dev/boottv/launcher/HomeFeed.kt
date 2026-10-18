@@ -68,6 +68,7 @@ internal sealed interface Featured {
     val key: String
     data class Media(val item: BaseItem, val client: JellyfinClient) : Featured { override val key = "media:${item.id}" }
     data class Live(val onNow: OnNow) : Featured { override val key = "live:${onNow.channel.id}" }
+    data class App(val app: FreeApp) : Featured { override val key = "app:${app.pkg}" }
 }
 
 /**
@@ -188,6 +189,12 @@ internal fun HomeHero(featured: Featured) {
                 )
                 Text(meta.joinToString("   ·   "), style = MaterialTheme.typography.bodyLarge, color = BootColors.TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 (now?.desc ?: now?.subtitle)?.let { Overview(it) }
+            }
+            is Featured.App -> {
+                Badge("FREE APP", Color(0xFF1F7A4A))
+                HeroTitle(featured.app.name)
+                Text("Free · Press OK to install from Google Play", style = MaterialTheme.typography.bodyLarge, color = BootColors.TextSecondary)
+                Overview(featured.app.blurb)
             }
         }
     }
