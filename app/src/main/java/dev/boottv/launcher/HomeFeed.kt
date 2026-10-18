@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,6 +37,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -159,6 +161,7 @@ private val CardShape = RoundedCornerShape(12.dp)
 /** Full-bleed artwork behind the top of Home; fades out as the page scrolls down. */
 @Composable
 internal fun BoxScope.HomeBackdrop(featured: Featured?, alpha: Float) {
+    if (featured is Featured.Live) return LiveBackdrop(featured.onNow.channel, alpha)
     val url = (featured as? Featured.Media)?.let { it.client.backdropUrl(it.item) } ?: return
     Box(
         Modifier
@@ -178,6 +181,28 @@ internal fun BoxScope.HomeBackdrop(featured: Featured?, alpha: Float) {
                 Brush.verticalGradient(0.55f to Color.Transparent, 1f to BootColors.Background)
             )
         )
+    }
+}
+
+/** No artwork for live channels: a soft glow with the channel's logo, so the banner isn't a bare dark box. */
+@Composable
+private fun BoxScope.LiveBackdrop(channel: Channel, alpha: Float) {
+    Box(
+        Modifier
+            .align(Alignment.TopEnd)
+            .fillMaxWidth(0.6f)
+            .height(400.dp)
+            .graphicsAlpha(alpha)
+            .background(Brush.radialGradient(listOf(BootColors.Accent.copy(alpha = 0.22f), Color.Transparent), radius = 900f)),
+    ) {
+        if (channel.logo != null) {
+            JfImage(
+                channel.logo,
+                Modifier.align(Alignment.Center).fillMaxWidth(0.5f).height(180.dp).alpha(0.9f),
+                contentScale = ContentScale.Fit,
+                plain = true,
+            )
+        }
     }
 }
 
@@ -210,7 +235,7 @@ internal fun HomeHero(featured: Featured) {
                 val meta = listOfNotNull(
                     listOfNotNull(ch.number, ch.name).joinToString(" "),
                     now?.let { "${time.format(Date(it.start))} – ${time.format(Date(it.stop))}" },
-                    next?.let { "Next: ${it.title}" },
+                    next?.takeIf { it.title != now?.title }?.let { "Next: ${it.title}" },
                 )
                 Text(meta.joinToString("   ·   "), style = MaterialTheme.typography.bodyLarge, color = BootColors.TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 (now?.desc ?: now?.subtitle)?.let { Overview(it) }
@@ -303,13 +328,7 @@ internal fun OnNowRow(
                     colors = CardDefaults.colors(containerColor = BootColors.SurfaceRaised),
                 ) {
                     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(BootColors.SurfaceRaised, BootColors.Surface)))) {
-                        JfImage(
-                            entry.channel.logo,
-                            Modifier.align(Alignment.Center).fillMaxWidth(0.6f).fillMaxHeight(0.5f),
-                            contentScale = ContentScale.Fit,
-                            fallback = Icons.Filled.LiveTv,
-                            plain = entry.channel.logo != null,
-                        )
+                        ChannelLogo(entry.channel, Modifier.align(Alignment.Center).fillMaxWidth(0.62f).fillMaxHeight(0.52f))
                         Text(
                             entry.channel.number ?: "",
                             style = MaterialTheme.typography.labelSmall,
@@ -340,6 +359,33 @@ internal fun OnNowRow(
                 Text(entry.now?.title ?: entry.channel.name, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium, color = BootColors.TextPrimary)
                 Text(entry.channel.name, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = BootColors.TextSecondary)
             }
+        }
+    }
+}
+
+/** Channel logo, or the channel's name when it has none or it fails to load. */
+@Composable
+private fun ChannelLogo(channel: Channel, modifier: Modifier) {
+    var failed by remember(channel.logo) { mutableStateOf(channel.logo == null) }
+    Box(modifier, contentAlignment = Alignment.Center) {
+        if (failed) {
+            Text(
+                channel.name,
+                color = BootColors.TextPrimary,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        } else {
+            coil.compose.AsyncImage(
+                model = channel.logo,
+                contentDescription = channel.name,
+                contentScale = ContentScale.Fit,
+                onError = { failed = true },
+                modifier = Modifier.fillMaxSize(),
+            )
         }
     }
 }

@@ -74,12 +74,15 @@ internal fun WebAppsRow(
     onAdd: () -> Unit,
 ) {
     Column(Modifier.fillMaxWidth()) {
-        Text(
-            if (apps.isEmpty()) "Web apps  ·  turn any website into an app" else "Web apps",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = BootColors.TextPrimary,
-        )
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text("Web apps", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = BootColors.TextPrimary)
+            Spacer(Modifier.width(12.dp))
+            Text(
+                if (apps.isEmpty()) "Turn any website into an app" else "Hold OK for options",
+                style = MaterialTheme.typography.bodySmall,
+                color = BootColors.TextSecondary,
+            )
+        }
         LazyRow(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(BootDimens.CardSpacing),

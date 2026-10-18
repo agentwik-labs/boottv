@@ -422,7 +422,7 @@ fun HomeScreen(nav: NavController) {
             Spacer(Modifier.height(BootDimens.RowSpacing))
         }
 
-        SectionTitle(if (showFeed) "Apps  ·  hold OK for options" else "Apps")
+        SectionTitle("Apps", hint = if (showFeed) "Hold OK for options" else null)
         Spacer(Modifier.height(10.dp))
         when {
             apps == null -> Text("Loading apps…", color = BootColors.TextSecondary)
@@ -578,8 +578,14 @@ private val MinimalScrollSpec = object : BringIntoViewSpec {
 }
 
 @Composable
-private fun SectionTitle(text: String) {
-    Text(text, style = MaterialTheme.typography.titleMedium, color = BootColors.TextSecondary)
+private fun SectionTitle(text: String, hint: String? = null) {
+    Row(verticalAlignment = Alignment.Bottom) {
+        Text(text, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = BootColors.TextPrimary)
+        if (hint != null) {
+            Spacer(Modifier.width(12.dp))
+            Text(hint, style = MaterialTheme.typography.bodySmall, color = BootColors.TextSecondary)
+        }
+    }
 }
 
 @Composable
@@ -622,8 +628,10 @@ private fun Clock() {
     val timeFormat = remember { android.text.format.DateFormat.getTimeFormat(context) }
     val dateFormat = remember { SimpleDateFormat("EEE, MMM d", Locale.getDefault()) }
     Column(horizontalAlignment = Alignment.End) {
-        Text(timeFormat.format(now), fontSize = 28.sp, fontWeight = FontWeight.SemiBold, color = BootColors.TextPrimary)
-        Text(dateFormat.format(now), style = MaterialTheme.typography.bodyMedium, color = BootColors.TextSecondary)
+        // Shadowed so it stays readable over bright backdrop artwork.
+        val shadow = androidx.compose.ui.text.TextStyle(shadow = androidx.compose.ui.graphics.Shadow(Color(0xCC000000), blurRadius = 12f))
+        Text(timeFormat.format(now), fontSize = 28.sp, fontWeight = FontWeight.SemiBold, color = BootColors.TextPrimary, style = shadow)
+        Text(dateFormat.format(now), style = MaterialTheme.typography.bodyMedium.merge(shadow), color = BootColors.TextPrimary.copy(alpha = 0.75f))
     }
 }
 

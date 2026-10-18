@@ -3,6 +3,7 @@ package dev.boottv
 import android.content.Intent
 import android.os.Bundle
 import android.view.KeyEvent
+import android.view.inputmethod.InputMethodManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -157,6 +158,19 @@ class MainActivity : ComponentActivity() {
         if (event.keyCode == KeyEvent.KEYCODE_SEARCH) {
             if (event.action == KeyEvent.ACTION_UP) navRequests.tryEmit(Routes.SEARCH)
             return true
+        }
+        // Keyboards (and the emulator) send Esc / Backspace where a remote sends Back. Treat them as Back,
+        // except Backspace while typing in a text field or web form.
+        val asBack = when (event.keyCode) {
+            KeyEvent.KEYCODE_ESCAPE -> true
+            KeyEvent.KEYCODE_DEL -> !getSystemService(InputMethodManager::class.java).isAcceptingText
+            else -> false
+        }
+        if (asBack) {
+            return super.dispatchKeyEvent(
+                KeyEvent(event.downTime, event.eventTime, event.action, KeyEvent.KEYCODE_BACK, event.repeatCount,
+                    event.metaState, event.deviceId, event.scanCode, event.flags, event.source)
+            )
         }
         return super.dispatchKeyEvent(event)
     }

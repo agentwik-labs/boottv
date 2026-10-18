@@ -28,6 +28,11 @@ if [ -n "$SERIAL" ]; then
 else
   LOG="$ROOT_DIR/build/emulator.log"
   mkdir -p "$ROOT_DIR/build"
+  # Let the Mac keyboard drive the TV (arrows = D-pad, Enter = OK, Esc = Back).
+  CFG="$HOME/.android/avd/$AVD.avd/config.ini"
+  if [ -f "$CFG" ] && ! grep -q '^hw.keyboard *= *yes' "$CFG"; then
+    sed -i '' -e '/^hw.keyboard *=/d' "$CFG" && echo "hw.keyboard = yes" >> "$CFG"
+  fi
   ARGS="-avd $AVD -no-snapshot-save -no-boot-anim"
   [ "$HEADLESS" -eq 1 ] && ARGS="$ARGS -no-window -no-audio"
   info "Starting emulator ($AVD$([ "$HEADLESS" -eq 1 ] && echo ', headless')); log: $LOG"
