@@ -88,7 +88,15 @@ import dev.boottv.core.ui.PinPadDialog
 import dev.boottv.core.ui.PinSetupDialog
 import dev.boottv.settings.BootPrefs
 import dev.boottv.settings.BootSettings
+import dev.boottv.livetv.LiveTvRepository
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.gestures.BringIntoViewSpec
+import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -104,6 +112,7 @@ private data class PinRequest(val title: String, val message: String?, val onSuc
 
 private enum class MoveDir { Left, Right, Up, Down }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun HomeScreen(nav: NavController) {
     val context = LocalContext.current
@@ -115,6 +124,9 @@ fun HomeScreen(nav: NavController) {
 
     // Load / reload the installed app list.
     LaunchedEffect(refreshTick) { apps = AppRepository.loadApps(context) }
+    // Content rows (Continue Watching, On Now): refreshed whenever Home comes back to the front.
+    LaunchedEffect(refreshTick) { runCatching { HomeFeed.refresh() } }
+    LaunchedEffect(Unit) { LiveTvRepository.state.collect { HomeFeed.refreshLive(it) } }
     LifecycleResumeEffect(Unit) {
         refreshTick++
         onPauseOrDispose { }
@@ -233,18 +245,49 @@ fun HomeScreen(nav: NavController) {
         runCatching { requester("grid:$pkg").requestFocus() }
     }
 
-    // Initial focus: last focused tile (when returning), else the first tile.
-    val firstKey = favorites.firstOrNull()?.takeIf { s.showFavorites }?.let { "fav:${it.packageName}" }
+    // Banner follows focus in the content rows; defaults to the first Continue Watching item.
+    var featured by remember { mutableStateOf(HomeFeed.firstFeatured()) }
+    val feedFirst = HomeFeed.firstFeatured()
+    LaunchedEffect(feedFirst?.key) {
+        val f = featured
+        val stillThere = f != null && (HomeFeed.continueWatching.any { "media:${it.id}" == f.key } ||
+            HomeFeed.onNow.any { "live:${it.channel.id}" == f.key })
+        if (!stillThere) featured = feedFirst
+    }
+    val showFeed = movingPkg == null && !HomeFeed.isEmpty
+    val firstRowPrefix = if (HomeFeed.client != null && HomeFeed.continueWatching.isNotEmpty()) "feed:media:" else "feed:live:"
+    val onFeedFocused: (String, Featured) -> Unit = { k, f ->
+        lastFocused = k
+        featured = f
+        // Back on the top row: show the whole banner again.
+        // Runs after the focus system's own bring-into-view scroll, which would otherwise cancel it.
+        if (k.startsWith(firstRowPrefix) && scroll.value > 0) scope.launch { delay(200); scroll.animateScrollTo(0) }
+    }
+
+    // Initial focus: last focused tile (when returning), else the first content card, else the first tile.
+    val feedFirstKey = when {
+        HomeFeed.client != null && HomeFeed.continueWatching.isNotEmpty() -> "feed:media:${HomeFeed.continueWatching.first().id}"
+        HomeFeed.onNow.isNotEmpty() -> "feed:live:${HomeFeed.onNow.first().channel.id}"
+        else -> null
+    }
+    val firstKey = feedFirstKey ?: favorites.firstOrNull()?.takeIf { s.showFavorites }?.let { "fav:${it.packageName}" }
         ?: visible.firstOrNull()?.let { "grid:${it.packageName}" }
     var focusTick by remember { mutableIntStateOf(0) }
     var didInitialFocus by remember { mutableStateOf(false) }
+    var homeHasFocus by remember { mutableStateOf(false) }
     LaunchedEffect(firstKey, focusTick) {
         if (firstKey == null) return@LaunchedEffect
         if (didInitialFocus && focusTick == 0) return@LaunchedEffect
-        delay(60)
-        val restore = lastFocused?.takeIf { focusTick == 0 && requesters.containsKey(it) }
-        val ok = runCatching { requester(restore ?: firstKey).requestFocus() }.isSuccess
-        if (!ok) runCatching { requester(firstKey).requestFocus() }
+        // Give the content rows a moment on cold start so focus lands on them rather than jumping later.
+        if (!HomeFeed.loaded) withTimeoutOrNull(2500) { snapshotFlow { HomeFeed.loaded }.first { it } }
+        // Rows are lazy and animate in after navigation, so retry until a card really holds focus.
+        repeat(20) { attempt ->
+            delay(if (attempt == 0) 60 else 100)
+            if (homeHasFocus) return@repeat
+            val restore = lastFocused?.takeIf { focusTick == 0 && requesters.containsKey(it) && attempt < 10 }
+            val ok = runCatching { requester(restore ?: firstKey).requestFocus() }.isSuccess
+            if (!ok) runCatching { requester(firstKey).requestFocus() }
+        }
         didInitialFocus = true
     }
 
@@ -257,19 +300,47 @@ fun HomeScreen(nav: NavController) {
             cancelMove()
             lastFocused = null
             scroll.animateScrollTo(0)
+            featured = HomeFeed.firstFeatured()
             focusTick++
         }
     }
 
+    Box(Modifier.fillMaxSize().background(BootColors.Background).onFocusChanged { homeHasFocus = it.hasFocus }) {
+    CompositionLocalProvider(LocalBringIntoViewSpec provides MinimalScrollSpec) {
+    if (showFeed) HomeBackdrop(featured, alpha = 1f - scroll.value / 500f)
     Column(
         Modifier
             .fillMaxSize()
-            .background(BootColors.Background)
             .verticalScroll(scroll)
             .padding(horizontal = BootDimens.PagePaddingH, vertical = BootDimens.PagePaddingV),
     ) {
-        HomeTopBar(movingLabel = movingPkg?.let { byPkg[it]?.label })
-        Spacer(Modifier.height(20.dp))
+        HomeTopBar(movingLabel = movingPkg?.let { byPkg[it]?.label }, compact = showFeed)
+        Spacer(Modifier.height(if (showFeed) 4.dp else 20.dp))
+
+        if (showFeed) {
+            featured?.let { HomeHero(it) }
+            Spacer(Modifier.height(12.dp))
+            val client = HomeFeed.client
+            if (client != null && HomeFeed.continueWatching.isNotEmpty()) {
+                ContinueRow(
+                    items = HomeFeed.continueWatching,
+                    client = client,
+                    requester = ::requester,
+                    onFocused = onFeedFocused,
+                    onOpen = { nav.navigate("media/detail/${it.id}") },
+                )
+                Spacer(Modifier.height(BootDimens.RowSpacing))
+            }
+            if (HomeFeed.onNow.isNotEmpty()) {
+                OnNowRow(
+                    channels = HomeFeed.onNow,
+                    requester = ::requester,
+                    onFocused = onFeedFocused,
+                    onWatch = { nav.navigate("live/play/${it.id}") },
+                )
+                Spacer(Modifier.height(BootDimens.RowSpacing))
+            }
+        }
 
         if (s.showFavorites && favorites.isNotEmpty() && movingPkg == null) {
             SectionTitle("Favorites")
@@ -301,7 +372,7 @@ fun HomeScreen(nav: NavController) {
             Spacer(Modifier.height(BootDimens.RowSpacing))
         }
 
-        SectionTitle("Apps")
+        SectionTitle(if (showFeed) "Apps  ·  hold OK for options" else "Apps")
         Spacer(Modifier.height(10.dp))
         when {
             apps == null -> Text("Loading apps…", color = BootColors.TextSecondary)
@@ -342,6 +413,8 @@ fun HomeScreen(nav: NavController) {
             }
         }
         Spacer(Modifier.height(48.dp))
+    }
+    }
     }
 
     // ---- Dialogs ----
@@ -412,13 +485,31 @@ fun HomeScreen(nav: NavController) {
     }
 }
 
+/**
+ * Scroll only as far as needed to show the focused card (plus room for its focus zoom), instead of
+ * the TV default that parks it a third of the way down and pushes the banner off screen.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+private val MinimalScrollSpec = object : BringIntoViewSpec {
+    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
+        val margin = 32f
+        val leading = offset - margin
+        val trailing = offset + size + margin
+        return when {
+            leading >= 0 && trailing <= containerSize -> 0f
+            leading < 0 || size + 2 * margin > containerSize -> leading
+            else -> trailing - containerSize
+        }
+    }
+}
+
 @Composable
 private fun SectionTitle(text: String) {
     Text(text, style = MaterialTheme.typography.titleMedium, color = BootColors.TextSecondary)
 }
 
 @Composable
-private fun HomeTopBar(movingLabel: String?) {
+private fun HomeTopBar(movingLabel: String?, compact: Boolean = false) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(
             "BootTV",
@@ -427,7 +518,8 @@ private fun HomeTopBar(movingLabel: String?) {
             color = BootColors.Accent,
         )
         Spacer(Modifier.width(24.dp))
-        Text(
+        // With the content banner showing, the app-options hint moves down to the Apps title.
+        if (compact) Spacer(Modifier.weight(1f)) else Text(
             if (movingLabel != null) {
                 "Moving $movingLabel — use the arrows, OK to drop, Back to cancel"
             } else {
