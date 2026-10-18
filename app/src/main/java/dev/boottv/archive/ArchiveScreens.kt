@@ -1,0 +1,458 @@
+package dev.boottv.archive
+
+import android.view.KeyEvent as AndroidKeyEvent
+import android.view.ViewGroup
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Replay
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.ui.PlayerView
+import androidx.navigation.NavController
+import androidx.navigation.NavGraphBuilder
+import androidx.navigation.NavType
+import androidx.navigation.compose.composable
+import androidx.navigation.navArgument
+import androidx.tv.material3.Border
+import androidx.tv.material3.Card
+import androidx.tv.material3.CardDefaults
+import androidx.tv.material3.Icon
+import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Text
+import dev.boottv.core.Routes
+import dev.boottv.core.SearchAction
+import dev.boottv.core.SearchProvider
+import dev.boottv.core.SearchResult
+import dev.boottv.core.ui.BootColors
+import dev.boottv.core.ui.BootDimens
+import dev.boottv.jellyfin.CenteredMessage
+import dev.boottv.jellyfin.JfButton
+import dev.boottv.jellyfin.JfImage
+import dev.boottv.jellyfin.LoadingMessage
+import dev.boottv.jellyfin.formatClock
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+
+internal fun freeDetailRoute(id: String) = "${Routes.FREE}/detail/$id"
+internal fun freePlayRoute(id: String) = "${Routes.FREE}/play/$id"
+
+/** Registers Routes.FREE and every "free/..." route. */
+fun NavGraphBuilder.archiveGraph(nav: NavController) {
+    composable(Routes.FREE) { FreeMoviesScreen(nav) }
+    composable("${Routes.FREE}/detail/{id}", arguments = listOf(navArgument("id") { type = NavType.StringType })) {
+        FreeDetailScreen(nav, it.arguments?.getString("id").orEmpty())
+    }
+    composable("${Routes.FREE}/play/{id}", arguments = listOf(navArgument("id") { type = NavType.StringType })) {
+        FreePlayerScreen(nav, it.arguments?.getString("id").orEmpty())
+    }
+}
+
+object ArchiveSearchProvider : SearchProvider {
+    override val name = "Free Movies"
+
+    override suspend fun search(query: String): List<SearchResult> = try {
+        ArchiveClient.search(query, 20).map {
+            SearchResult(
+                id = "archive:${it.id}",
+                title = it.title,
+                subtitle = listOfNotNull("Free movie", it.year).joinToString(" · "),
+                imageUrl = it.thumbUrl,
+                wide = true,
+                action = SearchAction.Navigate(freeDetailRoute(it.id)),
+            )
+        }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Throwable) {
+        emptyList()
+    }
+}
+
+/** Shelves survive leaving the screen, so coming back is instant. */
+private object FreeCache {
+    val shelves = mutableStateMapOf<String, List<ArchiveItem>>()
+    var error by mutableStateOf<String?>(null)
+}
+
+private val CardShape = RoundedCornerShape(12.dp)
+
+// ---------------------------------------------------------------------------- browse
+
+@Composable
+fun FreeMoviesScreen(nav: NavController) {
+    var reload by remember { mutableStateOf(0) }
+    // Show the rows only once every shelf has answered, so rows don't pop in above the focused one.
+    var loading by remember { mutableStateOf(FreeCache.shelves.size < ArchiveShelves.size) }
+    LaunchedEffect(reload) {
+        if (FreeCache.shelves.size == ArchiveShelves.size) return@LaunchedEffect
+        loading = true
+        FreeCache.error = null
+        val ok = coroutineScope {
+            ArchiveShelves.map { shelf ->
+                async { runCatching { ArchiveClient.shelf(shelf) }.onSuccess { FreeCache.shelves[shelf.collection] = it }.isSuccess }
+            }.awaitAll()
+        }
+        if (ok.none { it }) FreeCache.error = "Couldn't reach the Internet Archive. Check the connection and try again."
+        loading = false
+    }
+
+    val shelves = ArchiveShelves.mapNotNull { s -> FreeCache.shelves[s.collection]?.takeIf { it.isNotEmpty() }?.let { s to it } }
+    val error = FreeCache.error
+    when {
+        loading -> LoadingMessage("Loading free movies…")
+        shelves.isEmpty() && error != null -> CenteredMessage("Free Movies", error) { fr ->
+            JfButton("Try again", Icons.Filled.Replay, primary = true, modifier = Modifier.focusRequester(fr), onClick = { reload++ })
+        }
+        shelves.isEmpty() -> LoadingMessage("Nothing to show right now.")
+        else -> FreeBrowse(nav, shelves)
+    }
+}
+
+@Composable
+private fun FreeBrowse(nav: NavController, shelves: List<Pair<ArchiveShelf, List<ArchiveItem>>>) {
+    var focused by remember { mutableStateOf(shelves.first().second.first()) }
+    val first = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        repeat(10) { delay(80); if (runCatching { first.requestFocus() }.isSuccess) return@LaunchedEffect }
+    }
+
+    Box(Modifier.fillMaxSize().background(BootColors.Background)) {
+        // Banner artwork for the focused title.
+        Box(Modifier.align(Alignment.TopEnd).fillMaxWidth(0.62f).height(340.dp)) {
+            JfImage(focused.thumbUrl, Modifier.fillMaxSize(), plain = true)
+            Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to BootColors.Background, 0.5f to BootColors.Background.copy(alpha = 0.6f), 1f to Color.Transparent)))
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.5f to Color.Transparent, 1f to BootColors.Background)))
+        }
+        Column(Modifier.fillMaxSize()) {
+            Column(
+                Modifier.fillMaxWidth().height(200.dp).padding(horizontal = BootDimens.PagePaddingH, vertical = BootDimens.PagePaddingV),
+                verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.Bottom),
+            ) {
+                Text(
+                    "FREE MOVIES · INTERNET ARCHIVE",
+                    color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp,
+                    modifier = Modifier.background(Color(0xFF1F7A4A), RoundedCornerShape(4.dp)).padding(horizontal = 8.dp, vertical = 3.dp),
+                )
+                Text(focused.title, fontSize = 32.sp, fontWeight = FontWeight.Bold, color = BootColors.TextPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 700.dp))
+                Text(listOfNotNull(focused.year, "Free · no account, no ads").joinToString("   ·   "), style = MaterialTheme.typography.bodyLarge, color = BootColors.TextSecondary)
+            }
+            LazyColumn(
+                // Rows fade out as they scroll up under the banner instead of being cut off mid-card.
+                modifier = Modifier
+                    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                    .drawWithContent {
+                        drawContent()
+                        drawRect(Brush.verticalGradient(0f to Color.Transparent, 0.12f to Color.Black), blendMode = BlendMode.DstIn)
+                    },
+                contentPadding = PaddingValues(top = 8.dp, bottom = 48.dp),
+                verticalArrangement = Arrangement.spacedBy(BootDimens.RowSpacing),
+            ) {
+                items(shelves, key = { it.first.collection }) { (shelf, items) ->
+                    Column {
+                        Text(shelf.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = BootColors.TextPrimary,
+                            modifier = Modifier.padding(start = BootDimens.PagePaddingH))
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(BootDimens.CardSpacing),
+                            contentPadding = PaddingValues(horizontal = BootDimens.PagePaddingH, vertical = 12.dp),
+                        ) {
+                            items(items, key = { it.id }) { item ->
+                                ArchiveCard(
+                                    item,
+                                    modifier = if (shelf == shelves.first().first && item == items.first()) Modifier.focusRequester(first) else Modifier,
+                                    onFocused = { focused = item },
+                                    onClick = { nav.navigate(freeDetailRoute(item.id)) },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ArchiveCard(item: ArchiveItem, modifier: Modifier, onFocused: () -> Unit, onClick: () -> Unit) {
+    Column(Modifier.width(BootDimens.WideCardWidth)) {
+        Card(
+            onClick = onClick,
+            modifier = modifier.fillMaxWidth().aspectRatio(16f / 9f).onFocusChanged { if (it.isFocused) onFocused() },
+            shape = CardDefaults.shape(CardShape),
+            scale = CardDefaults.scale(focusedScale = 1.08f),
+            border = CardDefaults.border(focusedBorder = Border(BorderStroke(3.dp, Color.White), shape = CardShape)),
+        ) {
+            JfImage(item.thumbUrl, Modifier.fillMaxSize(), fallback = Icons.Filled.Movie)
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(item.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium, color = BootColors.TextPrimary)
+        item.year?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = BootColors.TextSecondary) }
+    }
+}
+
+// ---------------------------------------------------------------------------- detail
+
+@Composable
+fun FreeDetailScreen(nav: NavController, id: String) {
+    var details by remember { mutableStateOf<ArchiveDetails?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var attempt by remember { mutableStateOf(0) }
+    LaunchedEffect(id, attempt) {
+        error = null
+        runCatching { ArchiveClient.details(id) }
+            .onSuccess { details = it }
+            .onFailure { error = it.message ?: "Couldn't load this title." }
+    }
+    val d = details
+    when {
+        d == null && error != null -> CenteredMessage("Can't load this title", error) { fr ->
+            JfButton("Try again", Icons.Filled.Replay, primary = true, modifier = Modifier.focusRequester(fr), onClick = { attempt++ })
+            JfButton("Back", Icons.AutoMirrored.Filled.ArrowBack, onClick = { nav.popBackStack() })
+        }
+        d == null -> LoadingMessage()
+        else -> FreeDetail(nav, d)
+    }
+}
+
+@Composable
+private fun FreeDetail(nav: NavController, d: ArchiveDetails) {
+    val play = remember { FocusRequester() }
+    LaunchedEffect(Unit) { repeat(10) { delay(80); if (runCatching { play.requestFocus() }.isSuccess) return@LaunchedEffect } }
+    Box(Modifier.fillMaxSize().background(BootColors.Background)) {
+        Box(Modifier.align(Alignment.TopEnd).fillMaxWidth(0.65f).fillMaxHeight(0.8f)) {
+            JfImage(d.item.thumbUrl, Modifier.fillMaxSize(), plain = true)
+            Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to BootColors.Background, 0.55f to BootColors.Background.copy(alpha = 0.55f), 1f to Color.Transparent)))
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.45f to Color.Transparent, 1f to BootColors.Background)))
+        }
+        Column(
+            Modifier.fillMaxSize().padding(horizontal = BootDimens.PagePaddingH, vertical = 56.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(d.item.title, fontSize = 40.sp, fontWeight = FontWeight.Bold, color = BootColors.TextPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 760.dp))
+            val meta = listOfNotNull(d.item.year, d.runtime, d.creator?.take(60), d.license)
+            Text(meta.joinToString("   ·   "), style = MaterialTheme.typography.bodyLarge, color = BootColors.TextSecondary)
+            d.description?.let {
+                Text(it, style = MaterialTheme.typography.bodyLarge, color = BootColors.TextPrimary.copy(alpha = 0.88f), maxLines = 6, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 720.dp))
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (d.videoUrl != null) {
+                    JfButton("Play", Icons.Filled.PlayArrow, primary = true, modifier = Modifier.focusRequester(play), onClick = { nav.navigate(freePlayRoute(d.item.id)) })
+                } else {
+                    Text("No streamable video for this title.", color = BootColors.TextSecondary)
+                }
+                JfButton("Back", Icons.AutoMirrored.Filled.ArrowBack, onClick = { nav.popBackStack() })
+            }
+            Text("From the Internet Archive (archive.org), free and legal to watch.", style = MaterialTheme.typography.bodySmall, color = BootColors.TextSecondary)
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------- player
+
+@Composable
+fun FreePlayerScreen(nav: NavController, id: String) {
+    val context = LocalContext.current
+    var details by remember { mutableStateOf<ArchiveDetails?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val player = remember { ExoPlayer.Builder(context).build() }
+    var playing by remember { mutableStateOf(false) }
+    var buffering by remember { mutableStateOf(true) }
+    var position by remember { mutableLongStateOf(0L) }
+    var duration by remember { mutableLongStateOf(0L) }
+    var overlay by remember { mutableStateOf(true) }
+    var poked by remember { mutableLongStateOf(0L) }
+    var seekTarget by remember { mutableStateOf<Long?>(null) }
+    val root = remember { FocusRequester() }
+
+    DisposableEffect(player) {
+        val listener = object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) { playing = isPlaying }
+            override fun onPlaybackStateChanged(state: Int) {
+                buffering = state == Player.STATE_BUFFERING
+                if (state == Player.STATE_ENDED) nav.popBackStack()
+            }
+            override fun onPlayerError(e: PlaybackException) { error = "This video couldn't be played (${e.errorCodeName})." }
+        }
+        player.addListener(listener)
+        onDispose { player.removeListener(listener); player.release() }
+    }
+    LaunchedEffect(id) {
+        runCatching { ArchiveClient.details(id) }
+            .onSuccess { d ->
+                details = d
+                val url = d.videoUrl
+                if (url == null) error = "No streamable video for this title." else {
+                    player.setMediaItem(MediaItem.fromUri(url))
+                    player.prepare()
+                    player.playWhenReady = true
+                }
+            }
+            .onFailure { error = it.message ?: "Couldn't load this title." }
+    }
+    LaunchedEffect(player) { while (true) { position = player.currentPosition; duration = player.duration.coerceAtLeast(0L); delay(500) } }
+    LaunchedEffect(overlay, poked, playing) { if (overlay && playing) { delay(4000); overlay = false } }
+    LaunchedEffect(Unit) { runCatching { root.requestFocus() } }
+
+    val view = LocalView.current
+    DisposableEffect(view) { view.keepScreenOn = true; onDispose { view.keepScreenOn = false } }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val obs = LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_STOP) player.pause() }
+        lifecycleOwner.lifecycle.addObserver(obs)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
+    }
+    BackHandler { nav.popBackStack() }
+    fun poke() { overlay = true; poked = System.currentTimeMillis() }
+
+    Box(
+        Modifier.fillMaxSize().background(Color.Black).focusRequester(root)
+            .onPreviewKeyEvent { ev ->
+                val k = ev.nativeKeyEvent
+                val down = ev.type == KeyEventType.KeyDown
+                when (k.keyCode) {
+                    AndroidKeyEvent.KEYCODE_DPAD_CENTER, AndroidKeyEvent.KEYCODE_ENTER, AndroidKeyEvent.KEYCODE_SPACE,
+                    AndroidKeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
+                        if (down && k.repeatCount == 0) { if (player.isPlaying) player.pause() else player.play(); poke() }
+                        true
+                    }
+                    AndroidKeyEvent.KEYCODE_DPAD_LEFT, AndroidKeyEvent.KEYCODE_DPAD_RIGHT,
+                    AndroidKeyEvent.KEYCODE_MEDIA_REWIND, AndroidKeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> {
+                        val forward = k.keyCode == AndroidKeyEvent.KEYCODE_DPAD_RIGHT || k.keyCode == AndroidKeyEvent.KEYCODE_MEDIA_FAST_FORWARD
+                        if (down) {
+                            val step = if (k.repeatCount < 4) 10_000L else if (k.repeatCount < 12) 30_000L else 60_000L
+                            val max = if (duration > 0) duration - 1000 else Long.MAX_VALUE
+                            seekTarget = ((seekTarget ?: player.currentPosition) + if (forward) step else -step).coerceIn(0L, max.coerceAtLeast(0L))
+                            poke()
+                        } else {
+                            seekTarget?.let { player.seekTo(it); position = it }
+                            seekTarget = null
+                        }
+                        true
+                    }
+                    AndroidKeyEvent.KEYCODE_DPAD_UP, AndroidKeyEvent.KEYCODE_DPAD_DOWN -> { if (down) poke(); true }
+                    else -> false
+                }
+            }
+            .focusable(),
+    ) {
+        AndroidView(
+            factory = { ctx ->
+                PlayerView(ctx).apply {
+                    layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                    useController = false
+                    this.player = player
+                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                    isFocusable = false
+                    descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+                    setBackgroundColor(android.graphics.Color.BLACK)
+                }
+            },
+            modifier = Modifier.fillMaxSize(),
+        )
+        if (buffering && error == null) {
+            Box(Modifier.align(Alignment.Center).background(Color(0x99000000), RoundedCornerShape(12.dp)).padding(horizontal = 24.dp, vertical = 14.dp)) {
+                Text("Loading…", color = Color.White, style = MaterialTheme.typography.titleMedium)
+            }
+        }
+        error?.let { msg ->
+            Box(Modifier.fillMaxSize().background(Color(0xCC000000))) {
+                CenteredMessage("Can't play this video", msg) { fr ->
+                    JfButton("Back", Icons.AutoMirrored.Filled.ArrowBack, primary = true, modifier = Modifier.focusRequester(fr), onClick = { nav.popBackStack() })
+                }
+            }
+        }
+        AnimatedVisibility(error == null && (overlay || seekTarget != null), enter = fadeIn(), exit = fadeOut(), modifier = Modifier.fillMaxSize()) {
+            val pos = seekTarget ?: position
+            Box(Modifier.fillMaxSize()) {
+                Box(Modifier.fillMaxWidth().height(150.dp).align(Alignment.TopCenter).background(Brush.verticalGradient(listOf(Color(0xCC000000), Color.Transparent))))
+                Box(Modifier.fillMaxWidth().fillMaxHeight(0.35f).align(Alignment.BottomCenter).background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xE6000000)))))
+                Text(details?.item?.title.orEmpty(), style = MaterialTheme.typography.headlineSmall, color = Color.White, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.align(Alignment.TopStart).padding(horizontal = BootDimens.PagePaddingH, vertical = BootDimens.PagePaddingV))
+                Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(horizontal = BootDimens.PagePaddingH, vertical = BootDimens.PagePaddingV)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(if (playing) Icons.Filled.PlayArrow else Icons.Filled.Pause, null, tint = Color.White)
+                        Spacer(Modifier.width(12.dp))
+                        Text(formatClock(pos), color = if (seekTarget != null) BootColors.Accent else Color.White, style = MaterialTheme.typography.titleMedium)
+                        Spacer(Modifier.weight(1f))
+                        if (duration > 0) Text("-" + formatClock(duration - pos), color = Color.White, style = MaterialTheme.typography.titleMedium)
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    Box(Modifier.fillMaxWidth().height(6.dp).background(Color(0x55FFFFFF), RoundedCornerShape(3.dp))) {
+                        val frac = if (duration > 0) (pos.toFloat() / duration).coerceIn(0f, 1f) else 0f
+                        Box(Modifier.fillMaxHeight().fillMaxWidth(frac).background(BootColors.Accent, RoundedCornerShape(3.dp)))
+                    }
+                    Text("OK play/pause · ◀ ▶ seek · Back to exit", color = BootColors.TextSecondary.copy(alpha = 0.7f),
+                        style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 10.dp))
+                }
+            }
+        }
+    }
+}

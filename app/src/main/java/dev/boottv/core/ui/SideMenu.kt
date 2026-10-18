@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Theaters
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -55,6 +56,7 @@ val BootMenuItems = listOf(
     MenuItem(Routes.SEARCH, "Search", Icons.Filled.Search),
     MenuItem(Routes.LIVE, "Live TV", Icons.Filled.LiveTv),
     MenuItem(Routes.MEDIA, "My Media", Icons.Filled.VideoLibrary),
+    MenuItem(Routes.FREE, "Free Movies", Icons.Filled.Theaters),
     MenuItem(Routes.BROWSER, "Browser", Icons.Filled.Public),
     MenuItem(Routes.SETTINGS, "Settings", Icons.Filled.Settings),
 )

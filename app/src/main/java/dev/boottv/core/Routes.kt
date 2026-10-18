@@ -9,6 +9,7 @@ object Routes {
     const val SEARCH = "search"
     const val LIVE = "live"
     const val MEDIA = "media"
+    const val FREE = "free"
     const val BROWSER = "browser"
     const val SETTINGS = "settings"
 }

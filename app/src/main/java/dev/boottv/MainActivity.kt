@@ -33,6 +33,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import dev.boottv.archive.archiveGraph
 import dev.boottv.browser.browserGraph
 import dev.boottv.core.Routes
 import dev.boottv.core.ui.BootColors
@@ -118,6 +119,7 @@ class MainActivity : ComponentActivity() {
                             jellyfinGraph(nav)
                             liveTvGraph(nav)
                             browserGraph(nav)
+                            archiveGraph(nav)
                         }
                     }
                     // Side menu everywhere except full-screen players.
@@ -186,7 +188,7 @@ class MainActivity : ComponentActivity() {
 
         /** Full-screen players: no side menu at all (not composed, never takes focus). */
         fun isFullScreen(route: String?): Boolean =
-            route != null && (route.startsWith("media/play") || route.startsWith("live/play"))
+            route != null && (route.startsWith("media/play") || route.startsWith("live/play") || route.startsWith("free/play"))
 
         fun NavHostController.navigateTopLevel(target: String) {
             navigate(target) {
