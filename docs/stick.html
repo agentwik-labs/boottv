@@ -1,0 +1,264 @@
+<title>BootTV Stick Setup</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: one reading column; the screenshot wall breaks out wider, like a TV on a shelf. */
+  :root {
+    --bg: #f5f4fa;
+    --surface: #ffffff;
+    --fg: #17151f;
+    --muted: #5d5a6e;
+    --line: #dddae8;
+    --accent: #5b3fe0;
+    --accent-ink: #ffffff;
+    --good: #1f7a4a;
+    --bad: #b3261e;
+    --code-bg: #ecebf4;
+    --display: "Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+    --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0d0c14; --surface: #17151f; --fg: #eeecf6; --muted: #a29eb8; --line: #2b2839;
+      --accent: #8c73ff; --accent-ink: #0d0c14; --good: #5fd39a; --bad: #ff8a80; --code-bg: #1f1c2b;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0d0c14; --surface: #17151f; --fg: #eeecf6; --muted: #a29eb8; --line: #2b2839;
+    --accent: #8c73ff; --accent-ink: #0d0c14; --good: #5fd39a; --bad: #ff8a80; --code-bg: #1f1c2b;
+    color-scheme: dark;
+  }
+
+  body {
+    background: var(--bg); color: var(--fg);
+    font: 16px/1.6 var(--body);
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 40px 64px;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; display: grid; gap: 56px; }
+  .wide { max-width: 1120px; margin: 0 auto; width: 100%; }
+  h1, h2, h3 { font-family: var(--display); text-wrap: balance; line-height: 1.1; margin: 0; }
+  h1 { font-size: clamp(2.2rem, 6vw, 3.6rem); font-weight: 800; letter-spacing: -0.02em; }
+  h2 { font-size: 1.7rem; font-weight: 800; }
+  h3 { font-size: 1.15rem; font-weight: 600; }
+  p { margin: 0; }
+  a { color: var(--accent); }
+  a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+  .eyebrow { font: 500 0.78rem/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  section { display: grid; gap: 18px; }
+  .lede { font-size: 1.15rem; color: var(--muted); max-width: 60ch; }
+  header { display: grid; gap: 16px; }
+
+  /* Buy */
+  .pick {
+    background: var(--surface); border: 2px solid var(--accent); border-radius: 14px;
+    padding: 24px; display: grid; gap: 14px;
+  }
+  .pick .tag { justify-self: start; background: var(--accent); color: var(--accent-ink); font: 600 0.75rem/1 var(--mono); letter-spacing: 0.06em; text-transform: uppercase; padding: 6px 10px; border-radius: 99px; }
+  .specs { display: flex; flex-wrap: wrap; gap: 8px; padding: 0; margin: 0; list-style: none; }
+  .specs li { font: 500 0.82rem/1 var(--mono); border: 1px solid var(--line); border-radius: 99px; padding: 6px 10px; color: var(--muted); }
+  .buy { display: flex; flex-wrap: wrap; gap: 10px; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px; text-decoration: none;
+    background: var(--accent); color: var(--accent-ink); font-weight: 600; padding: 11px 16px; border-radius: 10px;
+  }
+  .btn.ghost { background: transparent; color: var(--fg); border: 1px solid var(--line); }
+  .alts { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+  .alt { border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: grid; gap: 8px; align-content: start; }
+  .alt p { color: var(--muted); font-size: 0.95rem; }
+  .avoid { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+  .avoid li { display: grid; grid-template-columns: 22px 1fr; gap: 10px; }
+  .avoid li::before { content: "✕"; color: var(--bad); font-weight: 700; }
+  .avoid b { font-weight: 600; }
+  .note { font-size: 0.9rem; color: var(--muted); }
+
+  /* Screens */
+  .screens { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
+  figure { margin: 0; display: grid; gap: 8px; min-width: 0; }
+  figure a { display: block; border-radius: 10px; overflow: hidden; border: 6px solid #111; background: #111; box-shadow: 0 10px 30px -18px rgba(0,0,0,.6); }
+  figure img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
+  figcaption { font-size: 0.92rem; color: var(--muted); }
+  figcaption b { color: var(--fg); font-weight: 600; }
+
+  /* Setup */
+  ol.steps { list-style: none; counter-reset: s; padding: 0; margin: 0; display: grid; gap: 22px; }
+  ol.steps > li { counter-increment: s; display: grid; grid-template-columns: 40px 1fr; gap: 14px; }
+  ol.steps > li::before {
+    content: counter(s); font: 800 1.1rem/40px var(--display); text-align: center;
+    width: 40px; height: 40px; border-radius: 50%; background: var(--code-bg); color: var(--accent);
+  }
+  .step { display: grid; gap: 8px; min-width: 0; }
+  .step p { color: var(--muted); }
+  .cmd { position: relative; background: var(--code-bg); border-radius: 10px; min-width: 0; }
+  .cmd pre { margin: 0; padding: 14px 84px 14px 14px; overflow-x: auto; font: 0.88rem/1.6 var(--mono); }
+  .copy {
+    position: absolute; top: 8px; right: 8px; font: 500 0.78rem/1 var(--body);
+    background: var(--surface); color: var(--fg); border: 1px solid var(--line); border-radius: 7px; padding: 7px 10px; cursor: pointer;
+  }
+  kbd { font: 500 0.85em var(--mono); background: var(--code-bg); border-radius: 5px; padding: 1px 6px; color: var(--fg); }
+
+  .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+  .fact { border-top: 2px solid var(--line); padding-top: 12px; display: grid; gap: 6px; }
+  .fact p { color: var(--muted); font-size: 0.95rem; }
+  .sources { font-size: 0.85rem; color: var(--muted); display: grid; gap: 4px; }
+  @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">BootTV · your own Roku, no ads</span>
+    <h1>Plug in a $50 stick. Get your home screen.</h1>
+    <p class="lede">A Google TV HDMI stick runs BootTV, the ad-free Roku-style launcher we built: app grid, free live TV guide, your own movies, YouTube, a web browser and one search box for all of it.</p>
+  </header>
+
+  <section id="buy">
+    <span class="eyebrow">Step 1 · Buy</span>
+    <h2>What to get on Amazon</h2>
+    <div class="pick">
+      <span class="tag">Get this one</span>
+      <h3>Xiaomi TV Stick 4K (2nd Gen), Google TV</h3>
+      <p>A plain HDMI stick that runs Google TV, so it can install BootTV and make it the home screen. It comes with a Bluetooth voice remote, and the mic button works with BootTV's voice search.</p>
+      <ul class="specs">
+        <li>Google TV</li><li>4K HDR · Dolby Vision</li><li>Wi‑Fi 6</li><li>Voice remote</li><li>USB powered</li>
+      </ul>
+      <div class="buy">
+        <a class="btn" href="https://www.amazon.com/dp/B0FFN6NRTZ" target="_blank" rel="noopener">View on Amazon →</a>
+        <a class="btn ghost" href="https://www.amazon.com/dp/B0GGNY89RS" target="_blank" rel="noopener">Other listing</a>
+        <a class="btn ghost" href="https://www.amazon.com/s?k=Xiaomi+TV+Stick+4K+2nd+Gen+Google+TV" target="_blank" rel="noopener">Search Amazon</a>
+      </div>
+      <p class="note">Check that the listing says “Google TV” and “2nd Gen”. The older 1st‑gen Mi TV Stick 4K runs Android TV 11. BootTV also works on it, but it is slower.</p>
+    </div>
+
+    <div class="alts">
+      <div class="alt">
+        <h3>Chromecast with Google TV (4K)</h3>
+        <p>The one with a remote, not your cast-only puck. Google stopped making it, so it is mostly sold renewed now.</p>
+        <a href="https://www.amazon.com/dp/B0B9FKF7HH" target="_blank" rel="noopener">Renewed on Amazon →</a>
+      </div>
+      <div class="alt">
+        <h3>onn 4K Google TV stick</h3>
+        <p>About $40 and a strong value pick, but it is sold at Walmart, not Amazon.</p>
+        <a href="https://www.walmart.com/search?q=onn+4k+google+tv+stick" target="_blank" rel="noopener">Search Walmart →</a>
+      </div>
+    </div>
+
+    <h3>Don't buy these</h3>
+    <ul class="avoid">
+      <li><span><b>Fire TV Stick 4K Select, Fire TV Stick HD (2026), the new 2026 Fire TV Stick 4K.</b> These run Amazon's Vega OS, not Android, so they can't install BootTV at all.</span></li>
+      <li><span><b>Fire TV Stick 4K Max.</b> It can install BootTV, but Fire OS blocks other home screens, so the Home button always goes back to Amazon's ads.</span></li>
+      <li><span><b>Another Roku stick.</b> It's locked to Roku's software, which is the problem you have now.</span></li>
+      <li><span><b>No-name “Android TV box” sticks.</b> They get no security updates and often come with malware.</span></li>
+    </ul>
+  </section>
+</div>
+
+<section class="wide" id="screens" style="margin-top:56px">
+  <span class="eyebrow">What you get</span>
+  <h2>BootTV on the TV</h2>
+  <div class="screens">
+    <figure>
+      <a href="screenshots/home.jpg" target="_blank" rel="noopener"><img src="screenshots/home.jpg" alt="BootTV home screen with an app grid and a side menu" loading="lazy"></a>
+      <figcaption><b>Home.</b> Your apps as big tiles: no sponsored rows, no autoplay trailers. Hold OK to move, hide or PIN-lock an app. This test device has only four apps installed.</figcaption>
+    </figure>
+    <figure>
+      <a href="screenshots/live.jpg" target="_blank" rel="noopener"><img src="screenshots/live.jpg" alt="Live TV guide grid with channels such as CBS News 24/7 and a preview window" loading="lazy"></a>
+      <figcaption><b>Live TV.</b> A free channel guide with a live preview, using legal feeds (Pluto TV, Samsung TV Plus, Plex, Roku Channel) and antenna tuners.</figcaption>
+    </figure>
+    <figure>
+      <a href="screenshots/media.jpg" target="_blank" rel="noopener"><img src="screenshots/media.jpg" alt="Netflix-style My Media screen showing Dracula with Resume and Continue Watching" loading="lazy"></a>
+      <figcaption><b>My Media.</b> A Netflix-style view of the movies on your Mac, through Jellyfin. Shown here: Jellyfin's public demo library.</figcaption>
+    </figure>
+    <figure>
+      <a href="screenshots/detail.jpg" target="_blank" rel="noopener"><img src="screenshots/detail.jpg" alt="Movie detail page with Resume from 20:16, Restart, Watched and More Like This" loading="lazy"></a>
+      <figcaption><b>Details.</b> Resume where you stopped, mark as watched, add to favorites, and see more like this.</figcaption>
+    </figure>
+    <figure>
+      <a href="screenshots/search.jpg" target="_blank" rel="noopener"><img src="screenshots/search.jpg" alt="Search for news showing live channels and YouTube results" loading="lazy"></a>
+      <figcaption><b>Search.</b> One box searches apps, live channels and your movies, and also hands the search to YouTube or the web. Voice works with the remote's mic.</figcaption>
+    </figure>
+    <figure>
+      <a href="screenshots/browser.jpg" target="_blank" rel="noopener"><img src="screenshots/browser.jpg" alt="TV web browser with bookmarks for YouTube TV, Tubi, Pluto TV" loading="lazy"></a>
+      <figcaption><b>Browser.</b> A TV web browser with a remote-driven cursor, ad and tracker blocking, and bookmarks for free sites like Tubi and Pluto TV.</figcaption>
+    </figure>
+    <figure>
+      <a href="screenshots/settings.jpg" target="_blank" rel="noopener"><img src="screenshots/settings.jpg" alt="BootTV settings with Network, Parental controls, Screensaver and more" loading="lazy"></a>
+      <figcaption><b>Settings.</b> Network, parental PIN, screensaver, live TV sources, My Media server and the default home app, all in one place.</figcaption>
+    </figure>
+  </div>
+  <p class="note" style="margin-top:12px">Real screenshots of the release build, taken on an Android TV test device at 1920×1080.</p>
+</section>
+
+<div class="wrap" style="margin-top:56px">
+  <section id="setup">
+    <span class="eyebrow">Step 2 · Set up (about 15 minutes)</span>
+    <h2>From box to BootTV</h2>
+    <ol class="steps">
+      <li><div class="step">
+        <h3>Plug it in</h3>
+        <p>Plug the stick into the TV's HDMI port and power it from the included wall adapter. A TV's USB port is often too weak and causes restarts. Pick that HDMI input on the TV and pair the remote when asked.</p>
+      </div></li>
+      <li><div class="step">
+        <h3>Finish Google TV setup</h3>
+        <p>Join your Wi‑Fi, the same network as your Mac, and sign in with a Google account so you get YouTube and the Play Store. You'll only see the stock home screen once.</p>
+      </div></li>
+      <li><div class="step">
+        <h3>Turn on debugging</h3>
+        <p><kbd>Settings</kbd> → <kbd>System</kbd> → <kbd>About</kbd>, then click <kbd>Android TV OS build</kbd> 7 times. Next go to <kbd>Developer options</kbd> and turn on <kbd>USB debugging</kbd> and, if you see it, <kbd>Wireless debugging</kbd>. Write down the TV's IP address from <kbd>Settings</kbd> → <kbd>Network</kbd>.</p>
+      </div></li>
+      <li><div class="step">
+        <h3>Connect from your Mac</h3>
+        <p>Open Terminal. Replace the IP with your TV's. If the TV shows a pairing code under Wireless debugging, use the second command. When the TV asks “Allow debugging?”, choose Always allow.</p>
+        <div class="cmd"><pre>cd ~/Desktop/roku-boot && source env.sh
+tools/connect.sh 192.168.1.50</pre><button class="copy" type="button">Copy</button></div>
+        <div class="cmd"><pre>tools/connect.sh --pair 192.168.1.50:37123 123456 192.168.1.50:41234</pre><button class="copy" type="button">Copy</button></div>
+      </div></li>
+      <li><div class="step">
+        <h3>Install BootTV and remove the bloat</h3>
+        <p>This installs BootTV, makes it the home screen, and turns off the stock launcher, ad rows and telemetry. Nothing is uninstalled. <code>--restore</code> puts everything back.</p>
+        <div class="cmd"><pre>tools/install.sh
+tools/debloat.sh --dry-run    # preview first
+tools/debloat.sh</pre><button class="copy" type="button">Copy</button></div>
+      </div></li>
+      <li><div class="step">
+        <h3>Press Home</h3>
+        <p>The remote's Home button now opens BootTV. Add your movies in <kbd>Settings</kbd> → <kbd>My Media</kbd> (guide in <code>docs/jellyfin.md</code>). Live TV works right away.</p>
+      </div></li>
+    </ol>
+  </section>
+
+  <section id="facts">
+    <span class="eyebrow">Good to know</span>
+    <div class="facts">
+      <div class="fact"><h3>Your Roku remote won't pair</h3><p>Roku remotes only talk to Roku devices. Use the stick's remote: D‑pad, OK, Back, Home and the mic all work with BootTV.</p></div>
+      <div class="fact"><h3>Netflix, YouTube and the rest</h3><p>They install from the Play Store as usual and appear on the BootTV grid.</p></div>
+      <div class="fact"><h3>Undo anytime</h3><p><code>tools/debloat.sh --restore</code> brings back the stock home screen and everything else that was turned off.</p></div>
+      <div class="fact"><h3>First run on real hardware</h3><p>BootTV is tested on an Android TV emulator. When your stick arrives, send me its IP address and I'll install it and check it with you.</p></div>
+    </div>
+  </section>
+
+  <section class="sources" id="sources">
+    <span class="eyebrow">Sources</span>
+    <a href="https://www.aftvnews.com/tag/sideload/" target="_blank" rel="noopener">AFTVnews: future Fire TV sticks run Vega OS, no sideloading</a>
+    <a href="https://www.aftvnews.com/amazon-blocks-custom-home-launchers-with-latest-fire-tv-software-update/" target="_blank" rel="noopener">AFTVnews: Amazon blocks custom home launchers on Fire TV</a>
+    <a href="https://cordcuttersnews.com/review-walmarts-new-onn-4k-google-tv-stick-2026-model-delivers-strong-value-in-a-compact-package/" target="_blank" rel="noopener">Cord Cutters News: onn 4K Google TV stick (2026) review</a>
+    <span>Amazon listings and prices change. Check the listing before you buy.</span>
+  </section>
+</div>
+
+<script>
+  document.querySelectorAll('.copy').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const text = btn.previousElementSibling.textContent;
+      const done = () => { btn.textContent = 'Copied'; setTimeout(() => btn.textContent = 'Copy', 1500); };
+      const fallback = () => {
+        const r = document.createRange(); r.selectNodeContents(btn.previousElementSibling);
+        const s = getSelection(); s.removeAllRanges(); s.addRange(r); btn.textContent = 'Press ⌘C';
+      };
+      try { navigator.clipboard.writeText(text).then(done, fallback); } catch (e) { fallback(); }
+    });
+  });
+</script>

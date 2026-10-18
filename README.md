@@ -33,9 +33,13 @@ Your TV isn't a smart TV, so you need a streaming box on HDMI. Pick one that run
 
 | Device | Approx. price | Verdict |
 |---|---|---|
-| **Walmart Onn 4K Pro** (Google TV) | ~$50 | **Best pick.** Fast, 3 GB RAM, Ethernet port, voice remote with mic, Dolby Vision/Atmos. |
+| **Xiaomi TV Stick 4K (2nd Gen)** (Google TV) | ~$50 | **Best HDMI stick on Amazon** ([B0FFN6NRTZ](https://www.amazon.com/dp/B0FFN6NRTZ)). Voice remote, Wi-Fi 6. |
+| **Walmart Onn 4K Pro** (Google TV) | ~$50 | Best box. Fast, 3 GB RAM, Ethernet port, voice remote with mic, Dolby Vision/Atmos. |
 | **Google TV Streamer** | ~$100 | Fastest, Ethernet, great remote. Pricier. |
-| Fire TV Stick 4K (Max) | ~$40–60 | Works, but Amazon **blocks launcher replacement** (see limitations). |
+| Fire TV Stick 4K Max | ~$40–60 | Installs, but Amazon **blocks launcher replacement** (see limitations). |
+| Fire TV Stick 4K Select / HD (2026) / new 4K (2026) | — | **Won't work.** Vega OS, not Android: no APK installs. |
+
+Buying guide with screenshots: [docs/stick.html](docs/stick.html).
 
 Avoid cheap no-name Android boxes (no security updates, often preloaded malware) and
 the old Chromecast with Google TV HD (2 GB / slow storage).
