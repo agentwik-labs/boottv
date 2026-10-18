@@ -101,6 +101,20 @@
   }
   kbd { font: 500 0.85em var(--mono); background: var(--code-bg); border-radius: 5px; padding: 1px 6px; color: var(--fg); }
 
+  .tvhero { display: grid; gap: 14px; justify-items: center; margin-top: 40px; }
+  .tv {
+    width: 100%; max-width: 1040px; background: #08080c; padding: 12px; border-radius: 16px;
+    box-shadow: 0 30px 60px -30px rgba(20, 10, 60, .55), inset 0 0 0 1px #24222e;
+  }
+  .tv img { display: block; width: 100%; aspect-ratio: 16 / 9; border-radius: 6px; }
+  .tablewrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; min-width: 520px; font-size: 0.95rem; }
+  th, td { text-align: left; padding: 11px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  thead th { font: 500 0.78rem/1.2 var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+  tbody th { font-weight: 600; }
+  td.yes::before { content: "✓ "; color: var(--good); font-weight: 700; }
+  td.no { color: var(--muted); }
+  td.no::before { content: "✕ "; color: var(--bad); font-weight: 700; }
   .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
   .fact { border-top: 2px solid var(--line); padding-top: 12px; display: grid; gap: 6px; }
   .fact p { color: var(--muted); font-size: 0.95rem; }
@@ -114,6 +128,31 @@
     <h1>Plug in a $50 stick. Get your home screen.</h1>
     <p class="lede">A Google TV HDMI stick runs BootTV, the ad-free Roku-style launcher we built: app grid, free live TV guide, your own movies, YouTube, a web browser and one search box for all of it.</p>
   </header>
+</div>
+
+<section class="wide tvhero" aria-label="BootTV home screen">
+  <div class="tv"><img src="screenshots/home.jpg" alt="BootTV home screen: a Dracula banner with Resume, a Continue Watching row and a live On Now row"></div>
+  <p class="note">This is the home screen you get. The banner follows whatever you highlight, and nothing on it is an ad.</p>
+</section>
+
+<div class="wrap" style="margin-top:56px">
+  <section id="compare">
+    <span class="eyebrow">Why bother</span>
+    <h2>BootTV vs. your Roku stick</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th scope="col"></th><th scope="col">Roku stick</th><th scope="col">Stick + BootTV</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Ads on the home screen</th><td class="no">Sponsored banner and promos</td><td class="yes">None</td></tr>
+          <tr><th scope="row">Pick up where you left off</th><td class="no">Inside each app</td><td class="yes">On Home, across your movies</td></tr>
+          <tr><th scope="row">Free live TV guide</th><td class="yes">The Roku Channel</td><td class="yes">Pluto, Samsung TV Plus, Plex, Roku feeds</td></tr>
+          <tr><th scope="row">Your own movie files</th><td class="no">Needs a separate app</td><td class="yes">Built in, Netflix-style</td></tr>
+          <tr><th scope="row">Web browser</th><td class="no">None</td><td class="yes">Built in, with ad blocking</td></tr>
+          <tr><th scope="row">Netflix, YouTube, Prime, Disney+</th><td class="yes">Yes</td><td class="yes">Yes, from the Play Store</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
 
   <section id="buy">
     <span class="eyebrow">Step 1 · Buy</span>
@@ -161,8 +200,12 @@
   <h2>BootTV on the TV</h2>
   <div class="screens">
     <figure>
-      <a href="screenshots/home.jpg" target="_blank" rel="noopener"><img src="screenshots/home.jpg" alt="BootTV home screen with an app grid and a side menu" loading="lazy"></a>
-      <figcaption><b>Home.</b> Your apps as big tiles: no sponsored rows, no autoplay trailers. Hold OK to move, hide or PIN-lock an app. This test device has only four apps installed.</figcaption>
+      <a href="screenshots/home_live.jpg" target="_blank" rel="noopener"><img src="screenshots/home_live.jpg" alt="Home with a live channel highlighted; the banner shows what's on now and next" loading="lazy"></a>
+      <figcaption><b>On Now.</b> Highlight a live channel on Home and the banner shows what's on and what's next. Press OK to watch.</figcaption>
+    </figure>
+    <figure>
+      <a href="screenshots/home_apps.jpg" target="_blank" rel="noopener"><img src="screenshots/home_apps.jpg" alt="Home scrolled down to the apps row below Continue Watching and On Now" loading="lazy"></a>
+      <figcaption><b>Your apps.</b> Big tiles below the rows. Hold OK to move, hide or PIN-lock one. This test device has only four apps installed.</figcaption>
     </figure>
     <figure>
       <a href="screenshots/live.jpg" target="_blank" rel="noopener"><img src="screenshots/live.jpg" alt="Live TV guide grid with channels such as CBS News 24/7 and a preview window" loading="lazy"></a>
