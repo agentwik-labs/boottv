@@ -1,5 +1,6 @@
 package dev.boottv.jellyfin
 
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.foundation.focusGroup
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.input.key.Key
@@ -163,6 +164,7 @@ internal fun TvTextField(
 private enum class SetupStep { Server, Login, QuickConnect }
 
 /** Shown inside the Settings screen: connect to a Jellyfin server and sign in. */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 internal fun JellyfinSettingsContent() {
     val session by JellyfinStore.sessionFlow.collectAsState(initial = null)
