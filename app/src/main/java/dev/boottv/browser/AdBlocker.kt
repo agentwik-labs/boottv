@@ -70,6 +70,9 @@ object AdBlocker {
         "juicyads.com", "trafficjunky.net", "hilltopads.net", "adsterra.com", "admaven.com",
         "onclickads.net", "adskeeper.co.uk", "bidvertiser.com", "infolinks.com", "kargo.com",
         "adhigh.net", "adkernel.com", "adbutler.com", "buysellads.com", "carbonads.com",
+        // Pop-up / pop-under / push-notification ad networks
+        "clickadu.com", "galaksion.com", "richads.com", "monetag.com", "popmyads.com", "trafficstars.com",
+        "evadav.com", "rollerads.com", "a-ads.com", "adsco.re", "mondiad.com", "pushground.com",
         // Analytics, session replay, measurement, data brokers
         "scorecardresearch.com", "comscore.com", "imrworldwide.com", "nielsen.com", "chartbeat.com",
         "chartbeat.net", "hotjar.com", "hotjar.io", "mouseflow.com", "fullstory.com", "crazyegg.com",

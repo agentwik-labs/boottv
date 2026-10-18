@@ -384,7 +384,7 @@ private fun Toolbar(state: BrowserState, isBookmarked: Boolean) {
                 if (state.cursorMode) "Cursor mode (switch to scroll/focus)" else "Scroll/focus mode (switch to cursor)",
                 state::toggleCursor, active = state.cursorMode, onFocused = onFocused)
             BrowserIconButton(Icons.Filled.Shield,
-                if (state.adBlock) "Ad blocker on · ${state.blocked} blocked" else "Ad blocker off",
+                if (state.adBlock) "Ad & pop-up blocker on · ${state.blocked + state.blockedPopups} blocked" else "Ad & pop-up blocker off",
                 state::toggleAdBlock, active = state.adBlock, onFocused = onFocused)
         }
         Text(

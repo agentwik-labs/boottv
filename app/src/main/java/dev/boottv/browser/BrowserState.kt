@@ -8,6 +8,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
+import android.os.Message
 import android.os.SystemClock
 import android.view.InputDevice
 import android.view.KeyEvent
@@ -161,7 +162,8 @@ class BrowserState(
             setSupportZoom(true)
             builtInZoomControls = true
             displayZoomControls = false
-            setSupportMultipleWindows(false)
+            // New windows go through onCreateWindow, where pop-ups are blocked or opened in place.
+            setSupportMultipleWindows(true)
             javaScriptCanOpenWindowsAutomatically = false
             mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
             allowFileAccess = false
@@ -195,6 +197,11 @@ class BrowserState(
             val uri = request.url
             val scheme = uri.scheme?.lowercase()
             if (scheme == "http" || scheme == "https") {
+                // Ad scripts redirect the whole page to a pop-up network on any click.
+                if (request.isForMainFrame && AdBlocker.isBlocked(uri.host)) {
+                    toast("Blocked a redirect to an ad")
+                    return true
+                }
                 if (request.isForMainFrame && uaFor(uri.toString()) != view.settings.userAgentString) {
                     loadUrl(uri.toString())
                     return true
@@ -241,7 +248,58 @@ class BrowserState(
         }
     }
 
+    /**
+     * Pop-up handling. With the ad blocker on, a new window to another site is blocked; one to the same
+     * site (login windows, "open in new tab") loads in place, since the TV browser has a single window.
+     */
+    private fun onPopup(target: String, userGesture: Boolean) {
+        val sameSite = siteOf(target) == siteOf(url)
+        if (!adBlock || (userGesture && sameSite)) {
+            loadUrl(target)
+        } else {
+            blockedPopups++
+            toast("Pop-up blocked")
+        }
+    }
+
+    var blockedPopups by mutableIntStateOf(0)
+        private set
+
+    private fun siteOf(u: String): String {
+        val host = runCatching { Uri.parse(u).host }.getOrNull()?.lowercase() ?: return ""
+        return host.split('.').takeLast(2).joinToString(".")
+    }
+
     private inner class Chrome : WebChromeClient() {
+        override fun onCreateWindow(view: WebView, isDialog: Boolean, isUserGesture: Boolean, resultMsg: Message): Boolean {
+            // The page never gets a real window: a throwaway WebView catches the address it tries to open.
+            val probe = WebView(context)
+            var handled = false
+            fun capture(target: String) {
+                if (handled || !target.startsWith("http")) return
+                handled = true
+                onPopup(target, isUserGesture)
+                probe.post { probe.stopLoading(); probe.destroy() }
+            }
+            probe.webViewClient = object : WebViewClient() {
+                override fun shouldOverrideUrlLoading(v: WebView, request: WebResourceRequest): Boolean {
+                    capture(request.url.toString()); return true
+                }
+                override fun onPageStarted(v: WebView, u: String, favicon: Bitmap?) { capture(u) }
+            }
+            // Blank or script-written pop-ups never navigate anywhere; count them as blocked and clean up.
+            probe.postDelayed({
+                if (!handled) {
+                    handled = true
+                    if (adBlock) { blockedPopups++; toast("Pop-up blocked") }
+                    probe.destroy()
+                }
+            }, 3000)
+            (resultMsg.obj as WebView.WebViewTransport).webView = probe
+            resultMsg.sendToTarget()
+            return true
+        }
+
         override fun onProgressChanged(view: WebView, newProgress: Int) {
             progress = newProgress
         }
