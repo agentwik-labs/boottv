@@ -17,6 +17,8 @@ apps (Netflix, YouTube, Prime Video, Disney+, ...) keep working as normal apps.
 | Streaming store | Google Play / your device's store, untouched |
 | Media library | Netflix-style **My Media** powered by Jellyfin on your Mac ([setup guide](docs/jellyfin.md)) |
 | Web browsing | Built-in TV browser with **ad and tracker blocking** |
+| — | **Web apps**: pin any website to Home as an app tile (Add website, or Add to Home in the browser) |
+| — | **Cartoons & Anime** row of free live channels on Home |
 | Screensaver | Built-in screensaver (clock/photo), no ads |
 | Parental controls | **Parental PIN** for locked apps and settings |
 | Settings | Theme, rows, apps, live TV sources, My Media server, PIN |

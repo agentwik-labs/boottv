@@ -43,6 +43,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.AddToHomeScreen
 import androidx.compose.material.icons.filled.Bookmarks
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
@@ -364,6 +365,14 @@ private fun Toolbar(state: BrowserState, isBookmarked: Boolean) {
                     }
                 },
                 active = isBookmarked, onFocused = onFocused)
+            BrowserIconButton(Icons.Filled.AddToHomeScreen, "Add to Home as an app",
+                onClick = {
+                    val u = state.url
+                    if (!u.startsWith("http")) return@BrowserIconButton
+                    val name = state.title.ifBlank { hostOf(u) }.take(40)
+                    scope.launch { WebApps.add(state.context, WebApp(name, u)); state.toast("Added \"$name\" to Home") }
+                },
+                onFocused = onFocused)
             BrowserIconButton(Icons.Filled.Bookmarks, "Bookmarks & history",
                 { state.panelVisible = true }, onFocused = onFocused)
             BrowserIconButton(Icons.Filled.ZoomOut, "Zoom out", state::zoomOut, onFocused = onFocused)
@@ -446,7 +455,7 @@ private fun SectionTitle(text: String) {
     Text(text, style = MaterialTheme.typography.titleLarge, color = BootColors.TextPrimary)
 }
 
-private val tileColors = listOf(
+internal val tileColors = listOf(
     Color(0xFF7B5CFF), Color(0xFFE5484D), Color(0xFF12A594), Color(0xFFF76B15),
     Color(0xFF0090FF), Color(0xFFD6409F), Color(0xFF46A758), Color(0xFFFFB224),
 )

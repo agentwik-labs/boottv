@@ -46,6 +46,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import dev.boottv.core.ui.BootColors
 import dev.boottv.core.ui.BootDimens
+import dev.boottv.browser.WebApp
 import dev.boottv.jellyfin.BaseItem
 import dev.boottv.jellyfin.JellyfinClient
 import dev.boottv.jellyfin.JfImage
@@ -69,6 +70,7 @@ internal sealed interface Featured {
     data class Media(val item: BaseItem, val client: JellyfinClient) : Featured { override val key = "media:${item.id}" }
     data class Live(val onNow: OnNow) : Featured { override val key = "live:${onNow.channel.id}" }
     data class App(val app: FreeApp) : Featured { override val key = "app:${app.pkg}" }
+    data class Web(val app: WebApp) : Featured { override val key = "web:${app.url}" }
 }
 
 /**
@@ -82,15 +84,18 @@ internal object HomeFeed {
         private set
     var onNow by mutableStateOf<List<OnNow>>(emptyList())
         private set
+    var cartoons by mutableStateOf<List<OnNow>>(emptyList())
+        private set
     /** True once the first load finished (rows may still be empty). */
     var loaded by mutableStateOf(false)
         private set
 
-    val isEmpty get() = continueWatching.isEmpty() && onNow.isEmpty()
+    val isEmpty get() = continueWatching.isEmpty() && onNow.isEmpty() && cartoons.isEmpty()
 
     fun firstFeatured(): Featured? =
         client?.let { c -> continueWatching.firstOrNull()?.let { Featured.Media(it, c) } }
             ?: onNow.firstOrNull()?.let { Featured.Live(it) }
+            ?: cartoons.firstOrNull()?.let { Featured.Live(it) }
 
     suspend fun refresh() = coroutineScope {
         val media = async {
@@ -102,17 +107,37 @@ internal object HomeFeed {
             }.getOrNull()
             c to (items ?: continueWatching)
         }
-        val live = async { pickOnNow(LiveTvRepository.awaitLoaded()) }
+        val live = async { LiveTvRepository.awaitLoaded() }
         val (c, items) = media.await()
         client = c
         continueWatching = if (c == null) emptyList() else items
-        onNow = live.await()
+        refreshLive(live.await())
         loaded = true
     }
 
     /** Recomputes On Now from the current guide (programmes roll over while Home is open). */
     fun refreshLive(state: LiveState) {
-        if (state.loaded) onNow = pickOnNow(state)
+        if (!state.loaded) return
+        onNow = pickOnNow(state)
+        cartoons = pickCartoons(state)
+    }
+
+    private val animationGroups = setOf("anime", "anime & gaming", "animated", "animation", "cartoons", "kids", "infantil")
+    private val animationName = Regex("""\b(anime|animation|animated|cartoons?|toons?)\b|toon""", RegexOption.IGNORE_CASE)
+
+    /** Anime and cartoon channels from the free live feeds (anime first), by channel group or name. */
+    private fun pickCartoons(state: LiveState): List<OnNow> {
+        val now = System.currentTimeMillis()
+        fun isAnime(ch: Channel) = ch.groups.any { it.lowercase().startsWith("anime") } || ch.name.contains("anime", ignoreCase = true)
+        val matches = state.channels.filter { ch ->
+            ch.groups.any { it.lowercase() in animationGroups } || animationName.containsMatchIn(ch.name)
+        }
+        fun isCartoon(ch: Channel) = animationName.containsMatchIn(ch.name) || ch.groups.any { it.lowercase().startsWith("anima") }
+        // Anime, then channels that are clearly animation, then the rest of the kids' channels.
+        return matches.sortedBy { if (isAnime(it)) 0 else if (isCartoon(it)) 1 else 2 }
+            .distinctBy { it.name.lowercase() }
+            .take(24)
+            .map { ch -> state.nowAndNext(ch.id, now).let { (n, x) -> OnNow(ch, n, x) } }
     }
 
     /** Favorites and the last-watched channel first, then channels that have guide data. */
@@ -190,6 +215,11 @@ internal fun HomeHero(featured: Featured) {
                 Text(meta.joinToString("   ·   "), style = MaterialTheme.typography.bodyLarge, color = BootColors.TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 (now?.desc ?: now?.subtitle)?.let { Overview(it) }
             }
+            is Featured.Web -> {
+                Badge("WEB APP", Color(0xFF3A5BD9))
+                HeroTitle(featured.app.name)
+                Text("${featured.app.host}  ·  Opens in the BootTV browser  ·  Hold OK to remove", style = MaterialTheme.typography.bodyLarge, color = BootColors.TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
             is Featured.App -> {
                 Badge("FREE APP", Color(0xFF1F7A4A))
                 HeroTitle(featured.app.name)
@@ -246,17 +276,19 @@ internal fun ContinueRow(
     }
 }
 
-/** "On Now" row of live channels with the current programme and its progress. */
+/** A row of live channels with the current programme and its progress ("On Now", "Cartoons & Anime"). */
 @Composable
 internal fun OnNowRow(
     channels: List<OnNow>,
     requester: (String) -> FocusRequester,
     onFocused: (key: String, Featured) -> Unit,
     onWatch: (Channel) -> Unit,
+    title: String = "On Now",
+    keyPrefix: String = "feed:live:",
 ) {
-    FeedRow("On Now") {
+    FeedRow(title) {
         items(channels, key = { it.channel.id }) { entry ->
-            val k = "feed:live:${entry.channel.id}"
+            val k = "$keyPrefix${entry.channel.id}"
             Column(Modifier.width(BootDimens.WideCardWidth)) {
                 Card(
                     onClick = { onWatch(entry.channel) },

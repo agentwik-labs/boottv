@@ -89,6 +89,9 @@ import dev.boottv.core.ui.PinSetupDialog
 import dev.boottv.settings.BootPrefs
 import dev.boottv.settings.BootSettings
 import dev.boottv.livetv.LiveTvRepository
+import dev.boottv.browser.WebApp
+import dev.boottv.browser.WebApps
+import dev.boottv.browser.browserRoute
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -170,8 +173,12 @@ fun HomeScreen(nav: NavController) {
     var workingOrder by remember { mutableStateOf<List<String>?>(null) }
     val gridApps: List<AppEntry> = workingOrder?.mapNotNull { byPkg[it] } ?: visible
 
+    val webApps by remember { WebApps.flow(context) }.collectAsState(initial = emptyList())
+
     // Dialogs.
     var options by remember { mutableStateOf<Pair<AppEntry, Boolean>?>(null) }
+    var webOptions by remember { mutableStateOf<WebApp?>(null) }
+    var addingWebApp by remember { mutableStateOf(false) }
     var pinRequest by remember { mutableStateOf<PinRequest?>(null) }
     var setupThen by remember { mutableStateOf<((String) -> Unit)?>(null) }
 
@@ -251,11 +258,15 @@ fun HomeScreen(nav: NavController) {
     LaunchedEffect(feedFirst?.key) {
         val f = featured
         val stillThere = f != null && (HomeFeed.continueWatching.any { "media:${it.id}" == f.key } ||
-            HomeFeed.onNow.any { "live:${it.channel.id}" == f.key })
+            (HomeFeed.onNow + HomeFeed.cartoons).any { "live:${it.channel.id}" == f.key })
         if (!stillThere) featured = feedFirst
     }
     val showFeed = movingPkg == null && !HomeFeed.isEmpty
-    val firstRowPrefix = if (HomeFeed.client != null && HomeFeed.continueWatching.isNotEmpty()) "feed:media:" else "feed:live:"
+    val firstRowPrefix = when {
+        HomeFeed.client != null && HomeFeed.continueWatching.isNotEmpty() -> "feed:media:"
+        HomeFeed.onNow.isNotEmpty() -> "feed:live:"
+        else -> "feed:toon:"
+    }
     val onFeedFocused: (String, Featured) -> Unit = { k, f ->
         lastFocused = k
         featured = f
@@ -268,6 +279,7 @@ fun HomeScreen(nav: NavController) {
     val feedFirstKey = when {
         HomeFeed.client != null && HomeFeed.continueWatching.isNotEmpty() -> "feed:media:${HomeFeed.continueWatching.first().id}"
         HomeFeed.onNow.isNotEmpty() -> "feed:live:${HomeFeed.onNow.first().channel.id}"
+        HomeFeed.cartoons.isNotEmpty() -> "feed:toon:${HomeFeed.cartoons.first().channel.id}"
         else -> null
     }
     val firstKey = feedFirstKey ?: favorites.firstOrNull()?.takeIf { s.showFavorites }?.let { "fav:${it.packageName}" }
@@ -295,6 +307,8 @@ fun HomeScreen(nav: NavController) {
     LaunchedEffect(Unit) {
         HomeSignals.reset.collect {
             options = null
+            webOptions = null
+            addingWebApp = false
             pinRequest = null
             setupThen = null
             cancelMove()
@@ -340,6 +354,28 @@ fun HomeScreen(nav: NavController) {
                 )
                 Spacer(Modifier.height(BootDimens.RowSpacing))
             }
+            if (HomeFeed.cartoons.isNotEmpty()) {
+                OnNowRow(
+                    channels = HomeFeed.cartoons,
+                    requester = ::requester,
+                    onFocused = onFeedFocused,
+                    onWatch = { nav.navigate("live/play/${it.id}") },
+                    title = "Cartoons & Anime",
+                    keyPrefix = "feed:toon:",
+                )
+                Spacer(Modifier.height(BootDimens.RowSpacing))
+            }
+        }
+        if (movingPkg == null) {
+            WebAppsRow(
+                apps = webApps,
+                requester = ::requester,
+                onFocused = { k, f -> lastFocused = k; if (showFeed && f != null) featured = f },
+                onOpen = { nav.navigate(browserRoute(it.url)) },
+                onOptions = { webOptions = it },
+                onAdd = { addingWebApp = true },
+            )
+            Spacer(Modifier.height(BootDimens.RowSpacing))
         }
         // Free legal apps not installed yet; once installed they show up in the Apps grid instead.
         val toInstall = remember(allApps) {
@@ -470,6 +506,30 @@ fun HomeScreen(nav: NavController) {
             onUninstall = {
                 options = null
                 guarded(app) { AppRepository.uninstall(context, app.packageName) }
+            },
+        )
+    }
+
+    webOptions?.let { app ->
+        WebAppOptionsDialog(
+            app = app,
+            onDismiss = { webOptions = null },
+            onOpen = { webOptions = null; nav.navigate(browserRoute(app.url)) },
+            onRemove = {
+                webOptions = null
+                scope.launch { WebApps.remove(context, app.url) }
+                Toast.makeText(context, "${app.name} removed from Home", Toast.LENGTH_SHORT).show()
+            },
+        )
+    }
+
+    if (addingWebApp) {
+        AddWebAppDialog(
+            onDismiss = { addingWebApp = false },
+            onSave = { app ->
+                addingWebApp = false
+                scope.launch { WebApps.add(context, app) }
+                Toast.makeText(context, "${app.name} added to Home", Toast.LENGTH_SHORT).show()
             },
         )
     }
