@@ -517,7 +517,14 @@ fun HomeScreen(nav: NavController) {
             onOpen = { webOptions = null; nav.navigate(browserRoute(app.url)) },
             onRemove = {
                 webOptions = null
-                scope.launch { WebApps.remove(context, app.url) }
+                // Land on the neighbouring tile, not the side menu, once this one is gone.
+                val i = webApps.indexOfFirst { it.url == app.url }
+                val next = (webApps.getOrNull(i + 1) ?: webApps.getOrNull(i - 1))?.takeIf { it.url != app.url }
+                val nextKey = next?.let { "web:${it.url}" } ?: "web:add"
+                scope.launch {
+                    WebApps.remove(context, app.url)
+                    repeat(10) { delay(80); if (runCatching { requester(nextKey).requestFocus() }.isSuccess) return@launch }
+                }
                 Toast.makeText(context, "${app.name} removed from Home", Toast.LENGTH_SHORT).show()
             },
         )

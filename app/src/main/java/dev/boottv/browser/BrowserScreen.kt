@@ -148,8 +148,11 @@ private fun BrowserContent(nav: NavController, initialUrl: String?) {
     }
     LaunchedEffect(state.focusWebSeq) {
         if (state.focusWebSeq > 0) {
-            delay(16)
-            state.webView.requestFocus()
+            // The toolbar and keyboard close over the next few frames and can hand focus to the side menu; keep it on the page.
+            repeat(8) {
+                delay(if (it == 0) 16 else 100)
+                if (!state.webView.hasFocus()) state.webView.requestFocus()
+            }
         }
     }
     // Continuous, accelerating cursor motion while a direction is held.
@@ -295,6 +298,8 @@ private fun Toolbar(state: BrowserState, isBookmarked: Boolean) {
                         val initial = if (state.url.startsWith("http")) state.url else ""
                         mutableStateOf(TextFieldValue(initial, TextRange(0, initial.length)))
                     }
+                    // Focusing the field collapses the selection; select the address again so typing replaces it.
+                    LaunchedEffect(Unit) { delay(200); field = field.copy(selection = TextRange(0, field.text.length)) }
                     BasicTextField(
                         value = field,
                         onValueChange = { field = it },

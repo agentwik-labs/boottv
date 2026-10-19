@@ -377,7 +377,7 @@ class BrowserState(
     }
 
     fun submitInput(text: String) {
-        toolbarVisible = false
+        hideToolbar() // also hands focus back to the page, not the side menu
         loadUrl(urlFromInput(text))
     }
 
