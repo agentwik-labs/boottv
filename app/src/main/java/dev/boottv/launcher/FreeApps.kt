@@ -1,5 +1,6 @@
 package dev.boottv.launcher
 
+import dev.boottv.core.ui.leftToMenu
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -85,13 +87,14 @@ internal fun FreeAppsRow(
             horizontalArrangement = Arrangement.spacedBy(BootDimens.CardSpacing),
             contentPadding = PaddingValues(vertical = 12.dp, horizontal = 4.dp),
         ) {
-            items(apps, key = { it.pkg }) { app ->
+            itemsIndexed(apps, key = { _, it -> it.pkg }) { i, app ->
                 val k = "free:${app.pkg}"
                 Card(
                     onClick = { onOpen(app) },
                     modifier = Modifier
                         .width(BootDimens.WideCardWidth * 0.75f)
                         .aspectRatio(16f / 9f)
+                        .leftToMenu(i == 0)
                         .focusRequester(requester(k))
                         .onFocusChanged { if (it.isFocused) onFocused(k, Featured.App(app)) },
                     shape = CardDefaults.shape(TileShape),

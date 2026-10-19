@@ -91,7 +91,10 @@ object ArchiveDownloads {
             if (d.done) states[d.id] = DownloadState.Done
         }
         // Pick unfinished downloads back up.
-        items.values.filter { !it.done }.forEach { d -> scope.launch { runCatching { start(d, torrentFile(d.id).readBytes()) }.onFailure { fail(d.id, it) } } }
+        val pending = items.values.filter { !it.done }
+        pending.forEach { states[it.id] = DownloadState.Running(0f, 0, 0, checking = true) }
+        if (pending.isNotEmpty()) DownloadService.ensureRunning(app)
+        pending.forEach { d -> scope.launch { runCatching { start(d, torrentFile(d.id).readBytes()) }.onFailure { fail(d.id, it) } } }
     }
 
     /** The finished local file for [id], or null. */
@@ -102,6 +105,7 @@ object ArchiveDownloads {
         val torrentUrl = details.torrentUrl ?: return fail(id, IOException("This title has no download."))
         val video = details.downloadUrl ?: return fail(id, IOException("No video to download."))
         states[id] = DownloadState.Running(0f, 0, 0, checking = true)
+        DownloadService.ensureRunning(app)
         scope.launch {
             try {
                 deleting[id]?.join() // a quick re-download waits for the old copy to be gone

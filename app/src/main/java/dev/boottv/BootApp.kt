@@ -7,6 +7,7 @@ class BootApp : Application() {
         super.onCreate()
         instance = this
         dev.boottv.archive.ArchiveDownloads.init(this)
+        dev.boottv.archive.ArchiveProgress.init(this)
     }
 
     companion object {

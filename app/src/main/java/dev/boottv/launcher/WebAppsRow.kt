@@ -1,5 +1,6 @@
 package dev.boottv.launcher
 
+import dev.boottv.core.ui.leftToMenu
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -88,12 +90,12 @@ internal fun WebAppsRow(
             horizontalArrangement = Arrangement.spacedBy(BootDimens.CardSpacing),
             contentPadding = PaddingValues(vertical = 12.dp, horizontal = 4.dp),
         ) {
-            items(apps, key = { it.url }) { app ->
+            itemsIndexed(apps, key = { _, it -> it.url }) { i, app ->
                 val k = "web:${app.url}"
                 val color = webAppColor(app)
                 WebTile(
                     color = color,
-                    modifier = Modifier.focusRequester(requester(k)).onFocusChanged { if (it.isFocused) onFocused(k, Featured.Web(app)) },
+                    modifier = Modifier.leftToMenu(i == 0).focusRequester(requester(k)).onFocusChanged { if (it.isFocused) onFocused(k, Featured.Web(app)) },
                     onClick = { onOpen(app) },
                     onLongClick = { onOptions(app) },
                 ) {
@@ -113,7 +115,7 @@ internal fun WebAppsRow(
             item(key = "add") {
                 WebTile(
                     color = BootColors.SurfaceRaised,
-                    modifier = Modifier.focusRequester(requester("web:add")).onFocusChanged { if (it.isFocused) onFocused("web:add", null) },
+                    modifier = Modifier.leftToMenu(apps.isEmpty()).focusRequester(requester("web:add")).onFocusChanged { if (it.isFocused) onFocused("web:add", null) },
                     onClick = onAdd,
                 ) {
                     Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {

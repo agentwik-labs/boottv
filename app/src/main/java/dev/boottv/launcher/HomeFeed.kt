@@ -1,5 +1,6 @@
 package dev.boottv.launcher
 
+import dev.boottv.core.ui.leftToMenu
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LiveTv
@@ -287,9 +289,10 @@ internal fun ContinueRow(
     onOpen: (BaseItem) -> Unit,
 ) {
     FeedRow("Continue Watching") {
-        items(items, key = { it.id }) { item ->
+        itemsIndexed(items, key = { _, it -> it.id }) { i, item ->
             val k = "feed:media:${item.id}"
             MediaCard(
+                modifier = Modifier.leftToMenu(i == 0),
                 item = item,
                 client = client,
                 wide = true,
@@ -312,7 +315,7 @@ internal fun OnNowRow(
     keyPrefix: String = "feed:live:",
 ) {
     FeedRow(title) {
-        items(channels, key = { it.channel.id }) { entry ->
+        itemsIndexed(channels, key = { _, it -> it.channel.id }) { i, entry ->
             val k = "$keyPrefix${entry.channel.id}"
             Column(Modifier.width(BootDimens.WideCardWidth)) {
                 Card(
@@ -320,6 +323,7 @@ internal fun OnNowRow(
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(16f / 9f)
+                        .leftToMenu(i == 0)
                         .focusRequester(requester(k))
                         .onFocusChanged { if (it.isFocused) onFocused(k, Featured.Live(entry)) },
                     shape = CardDefaults.shape(CardShape),

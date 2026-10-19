@@ -1,5 +1,6 @@
 package dev.boottv.archive
 
+import dev.boottv.core.ui.leftToMenu
 import android.view.KeyEvent as AndroidKeyEvent
 import android.view.ViewGroup
 import androidx.activity.compose.BackHandler
@@ -106,7 +107,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 
 internal fun freeDetailRoute(id: String) = "${Routes.FREE}/detail/$id"
-internal fun freePlayRoute(id: String) = "${Routes.FREE}/play/$id"
+internal fun freePlayRoute(id: String, restart: Boolean = false) = "${Routes.FREE}/play/$id?restart=$restart"
 
 /** Registers Routes.FREE and every "free/..." route. */
 fun NavGraphBuilder.archiveGraph(nav: NavController) {
@@ -114,8 +115,14 @@ fun NavGraphBuilder.archiveGraph(nav: NavController) {
     composable("${Routes.FREE}/detail/{id}", arguments = listOf(navArgument("id") { type = NavType.StringType })) {
         FreeDetailScreen(nav, it.arguments?.getString("id").orEmpty())
     }
-    composable("${Routes.FREE}/play/{id}", arguments = listOf(navArgument("id") { type = NavType.StringType })) {
-        FreePlayerScreen(nav, it.arguments?.getString("id").orEmpty())
+    composable(
+        "${Routes.FREE}/play/{id}?restart={restart}",
+        arguments = listOf(
+            navArgument("id") { type = NavType.StringType },
+            navArgument("restart") { type = NavType.BoolType; defaultValue = false },
+        ),
+    ) {
+        FreePlayerScreen(nav, it.arguments?.getString("id").orEmpty(), restart = it.arguments?.getBoolean("restart") ?: false)
     }
 }
 
@@ -148,6 +155,7 @@ private object FreeCache {
 
 private val CardShape = RoundedCornerShape(12.dp)
 private val DownloadedShelf = ArchiveShelf("Downloaded · plays offline", "_downloaded")
+private val ContinueShelf = ArchiveShelf("Continue watching", "_continue")
 
 // ---------------------------------------------------------------------------- browse
 
@@ -170,11 +178,15 @@ fun FreeMoviesScreen(nav: NavController) {
     }
 
     val saved = ArchiveDownloads.items.values.filter { it.done }.map { ArchiveItem(it.id, it.title, it.year) }
-    val shelves = listOfNotNull(saved.takeIf { it.isNotEmpty() }?.let { DownloadedShelf to it }) +
+    val resume = ArchiveProgress.continueWatching().map { ArchiveItem(it.id, it.title, it.year) }
+    val shelves = listOfNotNull(
+        resume.takeIf { it.isNotEmpty() }?.let { ContinueShelf to it },
+        saved.takeIf { it.isNotEmpty() }?.let { DownloadedShelf to it },
+    ) +
         ArchiveShelves.mapNotNull { s -> FreeCache.shelves[s.collection]?.takeIf { it.isNotEmpty() }?.let { s to it } }
     val error = FreeCache.error
     when {
-        loading && saved.isEmpty() -> LoadingMessage("Loading free movies…")
+        loading && saved.isEmpty() && resume.isEmpty() -> LoadingMessage("Loading free movies…")
         shelves.isEmpty() && error != null -> CenteredMessage("Free Movies", error) { fr ->
             JfButton("Try again", Icons.Filled.Replay, primary = true, modifier = Modifier.focusRequester(fr), onClick = { reload++ })
         }
@@ -187,10 +199,11 @@ fun FreeMoviesScreen(nav: NavController) {
 private fun FreeBrowse(nav: NavController, shelves: List<Pair<ArchiveShelf, List<ArchiveItem>>>) {
     var focused by remember { mutableStateOf(shelves.first().second.first()) }
     val first = remember { FocusRequester() }
-    var anyCardFocused by remember { mutableStateOf(false) }
-    // Retry until a card really has focus: this screen can appear while the side menu is still closing and holding it.
+    var firstFocused by remember { mutableStateOf(false) }
+    // Start on the top row's first card (Continue watching when there is one). Retry until it really has focus:
+    // the side menu may still be closing, and coming back the focus system first restores the old card.
     LaunchedEffect(Unit) {
-        repeat(15) { delay(100); if (anyCardFocused) return@LaunchedEffect; runCatching { first.requestFocus() } }
+        repeat(15) { delay(100); if (firstFocused) return@LaunchedEffect; runCatching { first.requestFocus() } }
     }
 
     Box(Modifier.fillMaxSize().background(BootColors.Background)) {
@@ -229,14 +242,14 @@ private fun FreeBrowse(nav: NavController, shelves: List<Pair<ArchiveShelf, List
                         Text(shelf.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = BootColors.TextPrimary,
                             modifier = Modifier.padding(start = BootDimens.PagePaddingH))
                         LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(BootDimens.CardSpacing),
+                                                        horizontalArrangement = Arrangement.spacedBy(BootDimens.CardSpacing),
                             contentPadding = PaddingValues(horizontal = BootDimens.PagePaddingH, vertical = 12.dp),
                         ) {
                             items(items, key = { it.id }) { item ->
                                 ArchiveCard(
                                     item,
-                                    modifier = if (shelf == shelves.first().first && item == items.first()) Modifier.focusRequester(first) else Modifier,
-                                    onFocused = { focused = item; anyCardFocused = true },
+                                    modifier = Modifier.leftToMenu(item == items.first()).let { if (shelf == shelves.first().first && item == items.first()) it.focusRequester(first) else it },
+                                    onFocused = { focused = item; if (shelf == shelves.first().first && item == items.first()) firstFocused = true },
                                     onClick = { nav.navigate(freeDetailRoute(item.id)) },
                                 )
                             }
@@ -258,7 +271,14 @@ private fun ArchiveCard(item: ArchiveItem, modifier: Modifier, onFocused: () -> 
             scale = CardDefaults.scale(focusedScale = 1.08f),
             border = CardDefaults.border(focusedBorder = Border(BorderStroke(3.dp, Color.White), shape = CardShape)),
         ) {
-            JfImage(item.thumbUrl, Modifier.fillMaxSize(), fallback = Icons.Filled.Movie)
+            Box(Modifier.fillMaxSize()) {
+                JfImage(item.thumbUrl, Modifier.fillMaxSize(), fallback = Icons.Filled.Movie)
+                ArchiveProgress.entries[item.id]?.let { r ->
+                    Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(10.dp).height(4.dp).background(Color(0x66FFFFFF), RoundedCornerShape(2.dp))) {
+                        Box(Modifier.fillMaxHeight().fillMaxWidth(r.fraction).background(BootColors.Accent, RoundedCornerShape(2.dp)))
+                    }
+                }
+            }
         }
         Spacer(Modifier.height(6.dp))
         Text(item.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium, color = BootColors.TextPrimary)
@@ -319,7 +339,12 @@ private fun FreeDetail(nav: NavController, d: ArchiveDetails) {
             val local = ArchiveDownloads.items[d.item.id]?.done == true
             val download = ArchiveDownloads.states[d.item.id]
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (d.videoUrl != null || local) {
+                val resumeAt = ArchiveProgress.entries[d.item.id]
+                if ((d.videoUrl != null || local) && resumeAt != null) {
+                    JfButton("Resume ${formatClock(resumeAt.positionMs)}", Icons.Filled.PlayArrow, primary = true, modifier = Modifier.focusRequester(play),
+                        onClick = { nav.navigate(freePlayRoute(d.item.id)) })
+                    JfButton("Start over", Icons.Filled.Replay, onClick = { nav.navigate(freePlayRoute(d.item.id, restart = true)) })
+                } else if (d.videoUrl != null || local) {
                     JfButton("Play", Icons.Filled.PlayArrow, primary = true, modifier = Modifier.focusRequester(play), onClick = { nav.navigate(freePlayRoute(d.item.id)) })
                 } else {
                     Text("No streamable video for this title.", color = BootColors.TextSecondary)
@@ -374,7 +399,7 @@ private fun formatRate(bps: Long): String = when {
 // ---------------------------------------------------------------------------- player
 
 @Composable
-fun FreePlayerScreen(nav: NavController, id: String) {
+fun FreePlayerScreen(nav: NavController, id: String, restart: Boolean = false) {
     val context = LocalContext.current
     var details by remember { mutableStateOf<ArchiveDetails?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -393,12 +418,16 @@ fun FreePlayerScreen(nav: NavController, id: String) {
             override fun onIsPlayingChanged(isPlaying: Boolean) { playing = isPlaying }
             override fun onPlaybackStateChanged(state: Int) {
                 buffering = state == Player.STATE_BUFFERING
-                if (state == Player.STATE_ENDED) nav.popBackStack()
+                if (state == Player.STATE_ENDED) { ArchiveProgress.clear(id); nav.popBackStack() }
             }
             override fun onPlayerError(e: PlaybackException) { error = "This video couldn't be played (${e.errorCodeName})." }
         }
         player.addListener(listener)
-        onDispose { player.removeListener(listener); player.release() }
+        onDispose {
+            player.removeListener(listener)
+            if (player.playbackState != Player.STATE_ENDED) details?.item?.let { ArchiveProgress.save(it, player.currentPosition, player.duration) }
+            player.release()
+        }
     }
     LaunchedEffect(id) {
         val local = ArchiveDownloads.localFile(id)
@@ -406,6 +435,7 @@ fun FreePlayerScreen(nav: NavController, id: String) {
             val saved = ArchiveDownloads.items.getValue(id)
             details = ArchiveDetails(ArchiveItem(id, saved.title, saved.year), null, null, null, "Saved on this device", null, null, null, null)
             player.setMediaItem(MediaItem.fromUri(Uri.fromFile(local)))
+            if (!restart) ArchiveProgress.entries[id]?.let { player.seekTo(it.positionMs) }
             player.prepare()
             player.playWhenReady = true
             return@LaunchedEffect
@@ -416,13 +446,22 @@ fun FreePlayerScreen(nav: NavController, id: String) {
                 val url = d.videoUrl
                 if (url == null) error = "No streamable video for this title." else {
                     player.setMediaItem(MediaItem.fromUri(url))
+                    if (!restart) ArchiveProgress.entries[id]?.let { player.seekTo(it.positionMs) }
                     player.prepare()
                     player.playWhenReady = true
                 }
             }
             .onFailure { error = it.message ?: "Couldn't load this title." }
     }
-    LaunchedEffect(player) { while (true) { position = player.currentPosition; duration = player.duration.coerceAtLeast(0L); delay(500) } }
+    LaunchedEffect(player) {
+        var tick = 0
+        while (true) {
+            position = player.currentPosition; duration = player.duration.coerceAtLeast(0L)
+            // Remember the spot every 10 s while playing, so a power cut doesn't lose it.
+            if (++tick % 20 == 0 && player.isPlaying) details?.item?.let { ArchiveProgress.save(it, position, duration) }
+            delay(500)
+        }
+    }
     LaunchedEffect(overlay, poked, playing) { if (overlay && playing) { delay(4000); overlay = false } }
     LaunchedEffect(Unit) { runCatching { root.requestFocus() } }
 

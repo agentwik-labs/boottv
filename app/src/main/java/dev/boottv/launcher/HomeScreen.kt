@@ -1,5 +1,6 @@
 package dev.boottv.launcher
 
+import dev.boottv.core.ui.leftToMenu
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -401,7 +402,7 @@ fun HomeScreen(nav: NavController) {
                     .padding(vertical = 10.dp),
                 horizontalArrangement = Arrangement.spacedBy(BootDimens.CardSpacing),
             ) {
-                favorites.forEach { app ->
+                favorites.forEachIndexed { i, app ->
                     key(app.packageName) {
                         val k = "fav:${app.packageName}"
                         AppTile(
@@ -410,6 +411,7 @@ fun HomeScreen(nav: NavController) {
                             moving = false,
                             modifier = Modifier
                                 .width(BootDimens.WideCardWidth)
+                                .leftToMenu(i == 0)
                                 .focusRequester(requester(k))
                                 .onFocusChanged { if (it.isFocused) lastFocused = k },
                             onClick = { launch(app) },
@@ -431,7 +433,7 @@ fun HomeScreen(nav: NavController) {
                 color = BootColors.TextSecondary,
             )
             else -> TileGrid(columns = s.gridColumns, spacing = BootDimens.CardSpacing) {
-                gridApps.forEach { app ->
+                gridApps.forEachIndexed { i, app ->
                     key(app.packageName) {
                         val k = "grid:${app.packageName}"
                         val isMoving = movingPkg == app.packageName
@@ -441,6 +443,7 @@ fun HomeScreen(nav: NavController) {
                             moving = isMoving,
                             dimmed = movingPkg != null && !isMoving,
                             modifier = Modifier
+                                .leftToMenu(i % s.gridColumns == 0 && movingPkg == null)
                                 .focusRequester(requester(k))
                                 .onFocusChanged { if (it.isFocused) lastFocused = k },
                             onClick = { if (movingPkg == null) launch(app) },

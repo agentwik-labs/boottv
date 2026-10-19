@@ -1,5 +1,7 @@
 package dev.boottv
 
+import dev.boottv.core.ui.LocalSideMenuFocus
+import androidx.compose.runtime.CompositionLocalProvider
 import android.content.Intent
 import android.os.Bundle
 import android.view.KeyEvent
@@ -25,7 +27,6 @@ import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
@@ -66,6 +67,7 @@ class MainActivity : ComponentActivity() {
                 val topLevel = topLevelOf(route)
                 val showMenu = !isFullScreen(route)
                 val contentFocus = remember { FocusRequester() }
+                val menuFocus = remember { FocusRequester() }
                 var focusContentTick by remember { mutableIntStateOf(0) }
                 var menuHasFocus by remember { mutableStateOf(false) }
                 var contentHasFocus by remember { mutableStateOf(false) }
@@ -109,9 +111,9 @@ class MainActivity : ComponentActivity() {
                             .padding(start = if (showMenu) BootDimens.SideMenuCollapsed else 0.dp)
                             .onFocusChanged { contentHasFocus = it.hasFocus }
                             .focusRequester(contentFocus)
-                            .focusRestorer()
                             .focusGroup(),
                     ) {
+                        CompositionLocalProvider(LocalSideMenuFocus provides menuFocus.takeIf { showMenu }) {
                         NavHost(nav, startDestination = Routes.HOME) {
                             composable(Routes.HOME) { HomeScreen(nav) }
                             composable(Routes.SEARCH) { SearchScreen(nav) }
@@ -120,6 +122,7 @@ class MainActivity : ComponentActivity() {
                             liveTvGraph(nav)
                             browserGraph(nav)
                             archiveGraph(nav)
+                        }
                         }
                     }
                     // Side menu everywhere except full-screen players.
@@ -137,7 +140,8 @@ class MainActivity : ComponentActivity() {
                             },
                             modifier = Modifier
                                 .align(Alignment.CenterStart)
-                                .onFocusChanged { menuHasFocus = it.hasFocus },
+                                .onFocusChanged { menuHasFocus = it.hasFocus }
+                                .focusRequester(menuFocus),
                         )
                     }
                 }

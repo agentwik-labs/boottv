@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Theaters
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -30,6 +31,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.composed
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
@@ -60,6 +64,29 @@ val BootMenuItems = listOf(
     MenuItem(Routes.BROWSER, "Browser", Icons.Filled.Public),
     MenuItem(Routes.SETTINGS, "Settings", Icons.Filled.Settings),
 )
+
+/** The side menu, so content rows can send Left there explicitly (null where there is no menu). */
+val LocalSideMenuFocus = staticCompositionLocalOf<FocusRequester?> { null }
+
+/**
+ * For the first card of a row: Left goes to the side menu. Without it, Android's focus search can pick a card in
+ * another row that happens to sit a few pixels further left.
+ */
+fun Modifier.leftToMenu(first: Boolean = true): Modifier = composed {
+    val menu = LocalSideMenuFocus.current
+    if (!first || menu == null) return@composed this
+    // Remembered so Right from the menu comes back to this card, not whichever row lines up with the menu item.
+    val me = remember { FocusRequester() }
+    DisposableEffect(me) { onDispose { if (MenuReturn.target === me) MenuReturn.target = null } }
+    this.focusProperties { left = menu }
+        .focusRequester(me)
+        .onFocusChanged { if (it.isFocused) MenuReturn.target = me }
+}
+
+/** The row-start card the side menu was entered from. */
+private object MenuReturn {
+    var target: FocusRequester? = null
+}
 
 /**
  * Roku-style left rail: icons only while collapsed, expands with labels when it holds focus.
@@ -94,6 +121,7 @@ fun SideMenu(
             .onFocusChanged { expanded = it.hasFocus }
             .focusProperties {
                 enter = { requesters[BootMenuItems[currentIndex].route] ?: FocusRequester.Default }
+                exit = { dir -> MenuReturn.target?.takeIf { dir == FocusDirection.Right } ?: FocusRequester.Default }
             }
             .focusGroup(),
     ) {
