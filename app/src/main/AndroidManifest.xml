@@ -71,6 +71,20 @@
                 android:name="android.service.dreams"
                 android:resource="@xml/screensaver_dream" />
         </service>
+        <!-- Device owner: lets BootTV run the whole stick (see Settings › Device control, tools/owner.sh). -->
+        <receiver
+            android:name=".owner.BootAdminReceiver"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_DEVICE_ADMIN">
+            <meta-data
+                android:name="android.app.device_admin"
+                android:resource="@xml/device_admin" />
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+            </intent-filter>
+        </receiver>
+
         <!-- Remote buttons (optional, the viewer turns it on in Accessibility settings). -->
         <service
             android:name=".remote.RemoteButtonsService"

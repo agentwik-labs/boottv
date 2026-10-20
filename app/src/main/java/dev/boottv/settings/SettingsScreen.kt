@@ -1,5 +1,9 @@
 package dev.boottv.settings
 
+import dev.boottv.core.ui.BootDialog
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.material.icons.filled.AdminPanelSettings
+import dev.boottv.owner.DeviceControl
 import androidx.compose.material.icons.filled.SettingsRemote
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import dev.boottv.livetv.MyChannels
@@ -98,6 +102,7 @@ private enum class Category(val title: String, val icon: ImageVector) {
     MyMedia("My Media", Icons.Filled.VideoLibrary),
     LiveTv("Live TV", Icons.Filled.LiveTv),
     Remote("Remote buttons", Icons.Filled.SettingsRemote),
+    Device("Device control", Icons.Filled.AdminPanelSettings),
     DefaultHome("Default home app", Icons.Filled.Home),
     System("System", Icons.Filled.Settings),
     About("About", Icons.Filled.Info),
@@ -215,6 +220,7 @@ private fun SettingsContent(s: BootSettings) {
                         Category.System -> SystemSection()
                         Category.About -> AboutSection()
                         Category.Remote -> RemoteButtonsSection()
+                        Category.Device -> DeviceControlSection()
                         else -> Unit
                     }
                     Spacer(Modifier.height(24.dp))
@@ -292,6 +298,71 @@ private fun ipAddresses(): List<String> = runCatching {
 }.getOrDefault(emptyList())
 
 // ---------------------------------------------------------------- sections
+
+/** BootTV as the stick's device owner: permanent Home, stock home screen hidden, lockdown, update schedule. */
+@Composable
+private fun DeviceControlSection() {
+    val context = LocalContext.current
+    var tick by remember { mutableIntStateOf(0) } // re-read the device's state after each change
+    var confirmRelease by remember { mutableStateOf(false) }
+    val owner = remember(tick) { DeviceControl.isOwner(context) }
+
+    if (!owner) {
+        Note(
+            "BootTV can run the whole TV, not just its home screen: Home always opens BootTV, Google's home screen and " +
+                "ad services stay off even after updates, and you decide when system updates install. Netflix, YouTube " +
+                "and other apps keep working."
+        )
+        SubHeader("How to turn it on")
+        Note(
+            "1. Reset the stick to factory settings (Settings › System › About › Reset).\n" +
+                "2. During setup, skip signing in to Google (choose \"Basic TV\" or \"Skip\").\n" +
+                "3. Install BootTV, then on the Mac run:  tools/owner.sh\n" +
+                "4. Sign in to Google Play afterwards if you want it."
+        )
+        SubHeader("Status")
+        InfoRow("Device owner", "Not set up")
+        return
+    }
+
+    InfoRow("Device owner", "BootTV controls this TV")
+    Note("Home always opens BootTV, even if another launcher is installed or an update brings one back.")
+
+    val hidden = remember(tick) { DeviceControl.hiddenPackages(context) }
+    SubHeader("Google's home screen and ad services")
+    SettingButton("Hidden", trailing = if (hidden.isNotEmpty()) "On (${hidden.size})" else "Off") {
+        DeviceControl.setStockHidden(context, hidden.isEmpty()); tick++
+    }
+    Note("Hidden, not deleted: switch this off to bring them back.")
+
+    SubHeader("Lockdown")
+    val locked = remember(tick) { DeviceControl.isLocked(context) }
+    SettingButton("Block factory reset, safe mode and new users", trailing = if (locked) "On" else "Off") {
+        DeviceControl.setLocked(context, !locked); tick++
+    }
+
+    SubHeader("System updates")
+    val mode = remember(tick) { DeviceControl.updateMode(context) }
+    DeviceControl.UpdateMode.entries.forEach { m ->
+        SettingButton(m.label, trailing = if (m == mode) "✓" else null) { DeviceControl.setUpdateMode(context, m); tick++ }
+    }
+    Note("Postponing holds updates for up to 30 days; Android then installs them anyway, so the TV stays secure.")
+
+    SubHeader("Give control back")
+    SettingButton("Release device control") { confirmRelease = true }
+    if (confirmRelease) {
+        BootDialog(onDismiss = { confirmRelease = false }, title = "Release device control?",
+            subtitle = "Google's home screen and services come back, the lockdown and update schedule are removed, and BootTV becomes an ordinary app. You can set it up again later.") {
+            val fr = remember { FocusRequester() }
+            LaunchedEffect(Unit) { runCatching { fr.requestFocus() } }
+            BootButton("Cancel", modifier = Modifier.fillMaxWidth().focusRequester(fr), onClick = { confirmRelease = false })
+            BootButton("Release", modifier = Modifier.fillMaxWidth(), onClick = {
+                runCatching { DeviceControl.release(context) }
+                confirmRelease = false; tick++
+            })
+        }
+    }
+}
 
 /** Hot buttons: assign spare remote buttons to BootTV sections and your own channels. */
 @Composable
