@@ -65,7 +65,7 @@ import dev.boottv.livetv.animationChannels
 import dev.boottv.livetv.LiveVideoSurface
 import dev.boottv.livetv.PlayerLifecycle
 import dev.boottv.livetv.createLivePlayer
-import dev.boottv.livetv.tune
+import dev.boottv.livetv.tuneAny
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.DisposableEffect
@@ -150,7 +150,9 @@ internal object HomeFeed {
     private fun pickOnNow(state: LiveState): List<OnNow> {
         if (state.channels.isEmpty()) return emptyList()
         val now = System.currentTimeMillis()
-        val preferred = listOfNotNull(state.lastChannelId) + state.favorites
+        // Your own channels, then the last one watched and favourites.
+        val mine = state.channels.filter { it.sourceId == "my" }.map { it.id }
+        val preferred = mine + listOfNotNull(state.lastChannelId) + state.favorites
         val ordered = preferred.mapNotNull { state.channel(it) } +
             state.channels.filter { ch -> state.nowAndNext(ch.id, now).first != null }
         return ordered.distinctBy { it.id }.take(14).map { ch ->
@@ -234,7 +236,7 @@ private fun BoxScope.LivePreview(channel: Channel, alpha: Float) {
         shown = false
         player.stop()
         delay(1200)
-        player.tune(channel)
+        runCatching { player.tuneAny(channel) }
         player.volume = 0f
     }
     PlayerLifecycle(player)

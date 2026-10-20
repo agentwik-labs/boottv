@@ -26,6 +26,8 @@ apps (Netflix, YouTube, Prime Video, Disney+, ...) keep working as normal apps.
 | — | **Live preview**: the focused channel plays silently behind the Home banner (can be turned off in Settings) |
 | — | **Cartoons**: anime and cartoon channels live now, free anime apps (RetroCrush, Tubi, Pluto TV), and public-domain cartoons sorted by series (Popeye, Fleischer Superman, Betty Boop, Looney Tunes, Casper, silent-era Felix and early Mickey, Creative Commons shorts); a **Cartoons & Anime** filter in the Live TV guide |
 | — | **Free Movies**: public-domain and Creative Commons films from the Internet Archive, with search, downloads for offline viewing that keep going in the background (Archive's own torrents only), and Resume / Continue watching. A **rights check** hides anything archive.org doesn't list as public domain or Creative Commons, unless it came out in 1930 or earlier |
+| — | **My channels**: turn your own movies and shows (My Media library, or videos copied to the TV / a USB drive) into channels that play around the clock, in the guide and on Home (Settings › Live TV) |
+| — | **Remote hot buttons**: Guide/TV opens the guide, Channel ▲▼ jumps to the last channel, and any spare remote button can open a section or one of your channels, inside BootTV or (with the optional accessibility setting) from any app (Settings › Remote buttons) |
 | Screensaver | Built-in screensaver (clock/photo), no ads |
 | Parental controls | **Parental PIN** for locked apps and settings |
 | Settings | Theme, rows, apps, live TV sources, My Media server, PIN |

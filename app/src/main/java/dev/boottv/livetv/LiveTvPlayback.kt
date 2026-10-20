@@ -65,6 +65,11 @@ fun ExoPlayer.tune(channel: Channel, forceHls: Boolean = false) {
     playWhenReady = true
 }
 
+/** Tunes to any channel: a stream from a playlist, or one of your own channels (what's on now, part-way through). */
+suspend fun ExoPlayer.tuneAny(channel: Channel) {
+    if (channel.url.startsWith(MyChannels.URL_PREFIX)) MyChannels.tune(this, channel) else tune(channel)
+}
+
 /** Pauses on ON_STOP and resumes live (jumping to the live edge) on ON_START. */
 @Composable
 fun PlayerLifecycle(player: ExoPlayer) {
@@ -74,7 +79,10 @@ fun PlayerLifecycle(player: ExoPlayer) {
             when (e) {
                 Lifecycle.Event.ON_STOP -> player.pause()
                 Lifecycle.Event.ON_START -> if (player.mediaItemCount > 0) {
-                    player.seekToDefaultPosition(); player.prepare(); player.play()
+                    // A personal channel catches up to where its schedule is now; streams jump to their live edge.
+                    val mine = MyChannels.livePosition(player.currentMediaItem?.mediaId)
+                    if (mine != null) player.seekTo(mine) else player.seekToDefaultPosition()
+                    player.prepare(); player.play()
                 }
                 else -> Unit
             }

@@ -1,4 +1,6 @@
 <resources>
     <string name="app_name">BootTV</string>
     <string name="screensaver_name">BootTV Screensaver</string>
+    <string name="remote_buttons_name">BootTV remote buttons</string>
+    <string name="remote_buttons_description">Lets the remote buttons you choose in BootTV (Settings › Remote buttons) open Live TV, your channels, Cartoons and more, from any app. BootTV only looks at those buttons; it never reads the screen or what you type.</string>
 </resources>

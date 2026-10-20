@@ -101,6 +101,8 @@ fun LivePlayerScreen(nav: NavController, channelId: String) {
             override fun onPlaybackStateChanged(s: Int) {
                 buffering = s == Player.STATE_BUFFERING || s == Player.STATE_IDLE
                 if (s == Player.STATE_READY) { error = null; autoSkips = 0 }
+                // A personal channel moves on to the next title in its schedule.
+                if (s == Player.STATE_ENDED && currentChannelForRetry?.url?.startsWith(MyChannels.URL_PREFIX) == true) retryTick++
             }
             override fun onPlayerError(e: PlaybackException) {
                 if (e.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) {
@@ -133,7 +135,7 @@ fun LivePlayerScreen(nav: NavController, channelId: String) {
     LaunchedEffect(channel?.id, retryTick) {
         val ch = channel ?: return@LaunchedEffect
         error = null; buffering = true; hlsRetried = null
-        runCatching { player.tune(ch) }.onFailure { error = it.message ?: "Can't play this channel" }
+        runCatching { player.tuneAny(ch) }.onFailure { error = it.message ?: "Can't play this channel" }
         LiveTvRepository.markWatched(ch.id)
         showBanner()
     }

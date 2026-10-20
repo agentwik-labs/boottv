@@ -1,5 +1,10 @@
 package dev.boottv.settings
 
+import androidx.compose.material.icons.filled.SettingsRemote
+import androidx.lifecycle.compose.LifecycleResumeEffect
+import dev.boottv.livetv.MyChannels
+import dev.boottv.remote.ButtonAction
+import dev.boottv.remote.RemoteButtons
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -92,6 +97,7 @@ private enum class Category(val title: String, val icon: ImageVector) {
     Screensaver("Screensaver", Icons.Filled.Nightlight),
     MyMedia("My Media", Icons.Filled.VideoLibrary),
     LiveTv("Live TV", Icons.Filled.LiveTv),
+    Remote("Remote buttons", Icons.Filled.SettingsRemote),
     DefaultHome("Default home app", Icons.Filled.Home),
     System("System", Icons.Filled.Settings),
     About("About", Icons.Filled.Info),
@@ -208,6 +214,7 @@ private fun SettingsContent(s: BootSettings) {
                         Category.DefaultHome -> DefaultHomeSection()
                         Category.System -> SystemSection()
                         Category.About -> AboutSection()
+                        Category.Remote -> RemoteButtonsSection()
                         else -> Unit
                     }
                     Spacer(Modifier.height(24.dp))
@@ -285,6 +292,63 @@ private fun ipAddresses(): List<String> = runCatching {
 }.getOrDefault(emptyList())
 
 // ---------------------------------------------------------------- sections
+
+/** Hot buttons: assign spare remote buttons to BootTV sections and your own channels. */
+@Composable
+private fun RemoteButtonsSection() {
+    val context = LocalContext.current
+    val mappings by RemoteButtons.mappings.collectAsState()
+    val learning by RemoteButtons.learning.collectAsState()
+    val learned by RemoteButtons.learned.collectAsState()
+    val myChannels by MyChannels.channels.collectAsState()
+    var everywhere by remember { mutableStateOf(RemoteButtons.serviceEnabled(context)) }
+    LifecycleResumeEffect(Unit) {
+        everywhere = RemoteButtons.serviceEnabled(context)
+        onPauseOrDispose { RemoteButtons.learning.value = false }
+    }
+    val actions = RemoteButtons.fixedActions +
+        myChannels.map { ButtonAction("Channel ${it.number}: ${it.name}", "live/play/${MyChannels.ID_PREFIX}${it.id}") }
+
+    Note("Built in: the remote's Guide or TV button opens the guide, and Channel up/down jumps to the last channel you watched.")
+    SubHeader("Your buttons")
+    if (mappings.isEmpty()) Note("None yet. Pick a button you don't use, like an app shortcut button, and choose what it opens.")
+    mappings.forEach { (code, action) ->
+        SettingButton("${RemoteButtons.keyName(code)}  →  ${action.label}", trailing = "Remove") { RemoteButtons.unassign(context, code) }
+    }
+    val key = learned
+    // The step's first button takes focus as the steps change, so it doesn't fall back to the category list.
+    val stepFocus = remember { FocusRequester() }
+    var opened by remember { mutableStateOf(false) } // not when merely scrolling past this section
+    LaunchedEffect(key, learning) {
+        if (!opened) { opened = true; return@LaunchedEffect }
+        repeat(10) { delay(60); if (runCatching { stepFocus.requestFocus() }.isSuccess) return@LaunchedEffect }
+    }
+    val first = Modifier.fillMaxWidth().focusRequester(stepFocus)
+    when {
+        key != null -> {
+            SubHeader("What should the ${RemoteButtons.keyName(key)} open?")
+            actions.forEachIndexed { i, a ->
+                BootButton(a.label, modifier = if (i == 0) first else Modifier.fillMaxWidth(), onClick = {
+                    RemoteButtons.assign(context, key, a); RemoteButtons.learned.value = null
+                })
+            }
+            SettingButton("Cancel") { RemoteButtons.learned.value = null }
+        }
+        learning -> {
+            Note("Press the remote button you want to use now…")
+            BootButton("Cancel", modifier = first, onClick = { RemoteButtons.learning.value = false })
+        }
+        else -> BootButton("Add a button", modifier = first, onClick = { RemoteButtons.learned.value = null; RemoteButtons.learning.value = true })
+    }
+
+    SubHeader("Use them in any app")
+    Note(
+        if (everywhere) "On: your buttons work everywhere, even while another app is open."
+        else "Off: your buttons work while BootTV is open. To use them in any app, turn on \"BootTV remote buttons\" " +
+            "in Accessibility settings (Android asks once; BootTV only listens for the buttons you chose)."
+    )
+    if (!everywhere) SettingButton("Open Accessibility settings") { openSystemSettings(context, Settings.ACTION_ACCESSIBILITY_SETTINGS) }
+}
 
 @Composable
 private fun NetworkSection() {

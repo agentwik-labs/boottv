@@ -46,6 +46,17 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import dev.boottv.core.ui.BootColors
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
+import dev.boottv.jellyfin.BaseItem
+import dev.boottv.jellyfin.JellyfinClient
+import kotlinx.coroutines.launch
 
 /** Live TV section embedded in the Settings screen (plain Column; the host provides scrolling). */
 @Composable
@@ -70,6 +81,8 @@ fun LiveTvSettingsContent() {
                 Text("Auto-skip channels that fail: " + if (state.autoSkip) "On" else "Off")
             }
         }
+
+        MyChannelsSettings()
 
         SectionTitle("Your sources")
         if (state.sources.isEmpty()) {
@@ -131,6 +144,89 @@ fun LiveTvSettingsContent() {
             enabled = ip.isNotBlank() && !ip.contains(' '),
         ) { Text("Add tuner") }
     }
+}
+
+/** Make channels out of your own movies and shows (My Media, or videos on the TV / a USB drive). */
+@Composable
+private fun MyChannelsSettings() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val mine by MyChannels.channels.collectAsState()
+    var status by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    var libraries by remember { mutableStateOf<List<BaseItem>>(emptyList()) }
+    var signedIn by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        val client = JellyfinClient.current()
+        signedIn = client != null
+        libraries = runCatching { client?.views().orEmpty() }.getOrDefault(emptyList())
+            .filter { it.collectionType in setOf("movies", "tvshows", "homevideos", "musicvideos", null) }
+    }
+    fun create(content: MyContent) {
+        if (busy) return
+        busy = true; status = "Making ${content.label}…"
+        scope.launch {
+            status = runCatching { MyChannels.create(context, content) }
+                .fold({ "Added channel ${it.number}: ${it.name} (${it.items.size} titles). It's at the top of the guide." }, { it.message ?: "Couldn't make that channel." })
+            busy = false
+        }
+    }
+    val videoPermission = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_VIDEO else Manifest.permission.READ_EXTERNAL_STORAGE
+    val askVideos = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) create(MyContent(MyContentKind.DEVICE_VIDEOS, "My Videos"))
+        else status = "BootTV needs permission to see the videos on this TV."
+    }
+
+    SectionTitle("My channels")
+    Text(
+        "Turn your own movies and shows into channels that play around the clock, like regular TV. They appear at the " +
+            "top of the guide and on Home. Sources: your My Media library, or videos copied to this TV or a USB drive.",
+        style = MaterialTheme.typography.bodySmall, color = BootColors.TextSecondary,
+    )
+    mine.forEach { ch ->
+        val now = MyChannels.nowPlaying(ch)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(Modifier.weight(1f)) {
+                Text("${ch.number}  ${ch.name}", style = MaterialTheme.typography.titleSmall, color = BootColors.TextPrimary)
+                Text(
+                    "${ch.items.size} titles" + (now?.let { " · on now: ${it.item.title}" } ?: ""),
+                    style = MaterialTheme.typography.bodySmall, color = BootColors.TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Button(onClick = {
+                scope.launch {
+                    status = runCatching { MyChannels.refresh(context, ch.id) }.fold({ "${ch.name} is up to date." }, { it.message ?: "Couldn't update." })
+                }
+            }) { Text("Update") }
+            Button(onClick = { scope.launch { MyChannels.remove(ch.id); status = "Removed ${ch.name}." } }) { Text("Remove") }
+        }
+    }
+    Text("Make a channel from:", style = MaterialTheme.typography.bodyMedium, color = BootColors.TextPrimary)
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Button(onClick = { create(MyContent(MyContentKind.JELLYFIN_MOVIES, "My Movies")) }, enabled = signedIn && !busy) { Text("All my movies") }
+        Button(onClick = { create(MyContent(MyContentKind.JELLYFIN_EPISODES, "My Shows")) }, enabled = signedIn && !busy) { Text("All my TV shows") }
+        Button(
+            onClick = {
+                if (ContextCompat.checkSelfPermission(context, videoPermission) == PackageManager.PERMISSION_GRANTED) {
+                    create(MyContent(MyContentKind.DEVICE_VIDEOS, "My Videos"))
+                } else askVideos.launch(videoPermission)
+            },
+            enabled = !busy,
+        ) { Text("Videos on this TV / USB") }
+    }
+    if (libraries.isNotEmpty()) {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            libraries.take(5).forEach { lib ->
+                Button(onClick = { create(MyContent(MyContentKind.JELLYFIN_LIBRARY, lib.name ?: "Library", lib.id)) }, enabled = !busy) {
+                    Text("Library: ${lib.name}")
+                }
+            }
+        }
+    }
+    if (!signedIn) {
+        Text("Sign in under My Media to make channels from your library.", style = MaterialTheme.typography.bodySmall, color = BootColors.TextSecondary)
+    }
+    status?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = BootColors.TextPrimary) }
 }
 
 @Composable

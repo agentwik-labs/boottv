@@ -306,7 +306,7 @@ private fun Guide(state: LiveState, nav: NavController) {
     LaunchedEffect(previewChannel?.id) {
         val ch = previewChannel ?: return@LaunchedEffect
         previewReady = false; previewError = false
-        runCatching { preview.tune(ch) }.onFailure { previewError = true }
+        runCatching { preview.tuneAny(ch) }.onFailure { previewError = true }
     }
 
     // ---- Key handling helpers ----

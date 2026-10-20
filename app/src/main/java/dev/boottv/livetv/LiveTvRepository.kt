@@ -77,6 +77,7 @@ object LiveTvRepository {
         if (initJob != null) return
         initJob = scope.launch {
             val firstRun = !configFile.exists()
+            MyChannels.load()
             try {
                 loadFromDisk()
             } catch (e: Exception) {
@@ -95,7 +96,11 @@ object LiveTvRepository {
                 }
             }
             publish()
+            // Personal channels: show changes at once, and pick up new titles in the library now and then.
+            launch { MyChannels.channels.collect { publish() } }
+            launch { MyChannels.refreshAll(BootApp.instance) }
             while (isActive) {
+                publish() // moves the personal channels' schedule along
                 refreshStale()
                 delay(15 * 60 * 1000L)
             }
@@ -131,6 +136,10 @@ object LiveTvRepository {
         val cfg = config
         val channels = ArrayList<Channel>()
         val programmes = HashMap<String, List<Programme>>()
+        // Your own channels come first in the guide.
+        val (mine, mySchedule) = MyChannels.asLive()
+        channels.addAll(mine)
+        programmes.putAll(mySchedule)
         cfg.sources.filter { it.enabled }.forEach { s ->
             val cache = caches[s.id] ?: return@forEach
             cache.channels.forEach { ch ->

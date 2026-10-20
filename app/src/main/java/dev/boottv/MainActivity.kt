@@ -46,6 +46,9 @@ import dev.boottv.jellyfin.jellyfinGraph
 import dev.boottv.launcher.HomeScreen
 import dev.boottv.launcher.HomeSignals
 import dev.boottv.livetv.liveTvGraph
+import dev.boottv.livetv.LiveTvRepository
+import dev.boottv.remote.RemoteButtons
+import androidx.compose.runtime.SideEffect
 import dev.boottv.search.SearchScreen
 import dev.boottv.settings.SettingsScreen
 import kotlinx.coroutines.delay
@@ -54,17 +57,24 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 class MainActivity : ComponentActivity() {
 
     /** Top-level routes requested from outside Compose (Home key, Search key). */
-    private val navRequests = MutableSharedFlow<String>(extraBufferCapacity = 4)
+    // Replays the latest request so one made before the screen is up (e.g. opened by a remote button) isn't lost.
+    private val navRequests = MutableSharedFlow<String>(replay = 1, extraBufferCapacity = 4)
+
+    /** The route on screen, for hot keys that behave differently in the player. */
+    @Volatile private var currentRoute: String? = null
 
     @OptIn(ExperimentalComposeUiApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        RemoteButtons.load(this)
+        intent?.getStringExtra(RemoteButtons.EXTRA_ROUTE)?.let { openRoute(it) }
         setContent {
             BootTheme {
                 val nav = rememberNavController()
                 val entry by nav.currentBackStackEntryAsState()
                 val route = entry?.destination?.route
                 val topLevel = topLevelOf(route)
+                SideEffect { currentRoute = route }
                 val showMenu = !isFullScreen(route)
                 val contentFocus = remember { FocusRequester() }
                 val menuFocus = remember { FocusRequester() }
@@ -75,6 +85,8 @@ class MainActivity : ComponentActivity() {
 
                 LaunchedEffect(Unit) {
                     navRequests.collect { target ->
+                        @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+                        navRequests.resetReplayCache()
                         if (target == Routes.HOME) {
                             if (!nav.popBackStack(Routes.HOME, inclusive = false)) nav.navigateTopLevel(Routes.HOME)
                             HomeSignals.reset.tryEmit(Unit)
@@ -151,6 +163,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        // A remote button assigned in Settings › Remote buttons.
+        intent.getStringExtra(RemoteButtons.EXTRA_ROUTE)?.let { openRoute(it); return }
         // Home button pressed while BootTV is already the foreground home app.
         if (intent.action == Intent.ACTION_MAIN &&
             (intent.hasCategory(Intent.CATEGORY_HOME) || intent.hasCategory(Intent.CATEGORY_LEANBACK_LAUNCHER) ||
@@ -160,7 +174,35 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** Goes to [route]; "last channel" becomes the channel watched last (or the first one). */
+    private fun openRoute(route: String) {
+        val target = if (route == RemoteButtons.LAST_CHANNEL) {
+            val s = LiveTvRepository.state.value
+            val id = s.lastChannelId?.takeIf { s.channel(it) != null } ?: s.channels.firstOrNull()?.id
+            if (id != null) "live/play/$id" else Routes.LIVE
+        } else route
+        navRequests.tryEmit(target)
+    }
+
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        val code = event.keyCode
+        // Settings › Remote buttons is waiting for a button (when the accessibility service is off, it hears it here).
+        if (RemoteButtons.learning.value && RemoteButtons.canAssign(code)) {
+            if (event.action == KeyEvent.ACTION_UP) { RemoteButtons.learned.value = code; RemoteButtons.learning.value = false }
+            return true
+        }
+        val inPlayer = currentRoute?.startsWith("live/play") == true
+        val hot = RemoteButtons.mappings.value[code]?.route ?: when (code) {
+            // Hot keys that work in BootTV without any setup.
+            KeyEvent.KEYCODE_GUIDE, KeyEvent.KEYCODE_TV -> Routes.LIVE
+            KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_CHANNEL_DOWN, KeyEvent.KEYCODE_LAST_CHANNEL ->
+                RemoteButtons.LAST_CHANNEL.takeIf { !inPlayer } // the player changes channel with these itself
+            else -> null
+        }
+        if (hot != null) {
+            if (event.action == KeyEvent.ACTION_UP) openRoute(hot)
+            return true
+        }
         if (event.keyCode == KeyEvent.KEYCODE_SEARCH) {
             if (event.action == KeyEvent.ACTION_UP) navRequests.tryEmit(Routes.SEARCH)
             return true
