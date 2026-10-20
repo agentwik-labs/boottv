@@ -24,7 +24,9 @@ object TvProvider {
 
     /** Opens the provider's app, or its Google Play page when it isn't installed. */
     fun open(context: Context) {
-        val launch = installedPackage(context)?.let { launchIntent(context, it) }
+        // Spectrum's app loses remote focus when it's resumed from the background (arrows stop working),
+        // so open it on a fresh screen each time instead of bringing back the old one.
+        val launch = installedPackage(context)?.let { launchIntent(context, it) }?.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK)
         val intent = launch ?: Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=${packages.first()}"))
         try {
             context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
