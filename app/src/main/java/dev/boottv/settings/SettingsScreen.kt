@@ -477,6 +477,15 @@ private fun HomeScreenSection(s: BootSettings) {
     var apps by remember { mutableStateOf<List<AppEntry>>(emptyList()) }
     LaunchedEffect(Unit) { apps = AppRepository.loadApps(context) }
 
+    SubHeader("Look")
+    SettingButton("Theme", trailing = ThemePresets.byId(s.themeId).name) {
+        val all = ThemePresets.all
+        val next = all[(all.indexOf(ThemePresets.byId(s.themeId)) + 1) % all.size]
+        scope.launch { BootPrefs.setTheme(context, next.id) }
+    }
+    if (ThemePresets.byId(s.themeId).playful) {
+        Note("Pocket Monsters uses its own colours. Accent colours apply to the Minimal theme.")
+    } else {
     SubHeader("Accent color")
     Row(horizontalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.padding(vertical = 6.dp)) {
         AccentPresets.all.forEach { preset ->
@@ -502,6 +511,7 @@ private fun HomeScreenSection(s: BootSettings) {
         }
     }
     Note("Current: ${AccentPresets.byId(s.accentId).name}")
+    }
 
     SubHeader("Layout")
     SettingButton("Apps per row", trailing = "${s.gridColumns}") {
@@ -509,11 +519,6 @@ private fun HomeScreenSection(s: BootSettings) {
     }
     SettingButton("Favorites row", trailing = if (s.showFavorites) "On" else "Off") {
         scope.launch { BootPrefs.setShowFavorites(context, !s.showFavorites) }
-    }
-    SettingButton("Theme", trailing = ThemePresets.byId(s.themeId).name) {
-        val all = ThemePresets.all
-        val next = all[(all.indexOf(ThemePresets.byId(s.themeId)) + 1) % all.size]
-        scope.launch { BootPrefs.setTheme(context, next.id) }
     }
     SettingButton("Live preview on Home", trailing = if (s.livePreview) "On" else "Off") {
         scope.launch { BootPrefs.setLivePreview(context, !s.livePreview) }
