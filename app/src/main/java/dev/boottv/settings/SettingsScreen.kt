@@ -380,7 +380,8 @@ private fun RemoteButtonsSection() {
     val actions = RemoteButtons.fixedActions +
         myChannels.map { ButtonAction("Channel ${it.number}: ${it.name}", "live/play/${MyChannels.ID_PREFIX}${it.id}") }
 
-    Note("Built in: the remote's Guide or TV button opens the guide, and Channel up/down jumps to the last channel you watched.")
+    Note("Built in: Channel up/down jumps to the last channel you watched. The Guide and TV buttons open the guide (or Spectrum) " +
+        "once \"Use them in any app\" below is on, because Android keeps those two buttons for itself otherwise.")
     SubHeader("Your buttons")
     if (mappings.isEmpty()) Note("None yet. Pick a button you don't use, like an app shortcut button, and choose what it opens.")
     mappings.forEach { (code, action) ->

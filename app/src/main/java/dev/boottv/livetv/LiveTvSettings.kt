@@ -171,12 +171,14 @@ private fun ProviderSettings() {
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Button(onClick = { TvProvider.open(context) }) { Text(if (pkg == null) "Get Spectrum TV" else "Open Spectrum TV") }
         if (pkg != null) {
-            Button(onClick = { TvProvider.setLiveOpensProvider(context, !liveOpens); tick++ }) {
-                Text("Live TV & Guide button open Spectrum: " + if (liveOpens) "On" else "Off")
-            }
             Button(onClick = { scope.launch { BootPrefs.setFavorite(context, pkg, !pinned) } }) {
                 Text(if (pinned) "On Home ✓" else "Put on Home")
             }
+        }
+    }
+    if (pkg != null) {
+        Button(onClick = { TvProvider.setLiveOpensProvider(context, !liveOpens); tick++ }) {
+            Text("Live TV menu and Guide button open Spectrum: " + if (liveOpens) "On" else "Off")
         }
     }
     if (liveOpens && pkg != null) {

@@ -3,6 +3,8 @@ package dev.boottv.remote
 import android.accessibilityservice.AccessibilityService
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
+import dev.boottv.core.Routes
+import dev.boottv.livetv.TvProvider
 
 /** Watches only for the remote buttons assigned in Settings › Remote buttons and opens BootTV there. */
 class RemoteButtonsService : AccessibilityService() {
@@ -19,9 +21,13 @@ class RemoteButtonsService : AccessibilityService() {
             }
             return true
         }
-        val action = RemoteButtons.mappings.value[code] ?: return false
+        // Android TV keeps the Guide and TV buttons for the system before apps see them; here they still arrive.
+        val route = RemoteButtons.mappings.value[code]?.route ?: when (code) {
+            KeyEvent.KEYCODE_GUIDE, KeyEvent.KEYCODE_TV -> if (TvProvider.liveOpensProvider(this)) TvProvider.ROUTE else Routes.LIVE
+            else -> return false
+        }
         // Act on release, and swallow the press too so the button's own app doesn't also open.
-        if (event.action == KeyEvent.ACTION_UP) RemoteButtons.open(this, action.route)
+        if (event.action == KeyEvent.ACTION_UP) RemoteButtons.open(this, route)
         return true
     }
 
