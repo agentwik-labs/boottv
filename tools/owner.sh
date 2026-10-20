@@ -13,7 +13,9 @@ select_device "${1:-}"
 dsh pm path "$PKG" >/dev/null 2>&1 || die "BootTV isn't installed on $SERIAL. Run tools/install.sh first."
 
 if dsh dumpsys device_policy 2>/dev/null | grep -A3 -i "Device Owner" | grep -q "$PKG"; then
-  ok "BootTV is already the device owner of $SERIAL."
+  # Repair: Android can drop the owner's admin component (it stays "owner" but every policy call fails).
+  dsh dpm set-active-admin "$PKG/.owner.BootAdminReceiver" >/dev/null 2>&1 || true
+  ok "BootTV is the device owner of $SERIAL (checked and repaired if needed)."
   exit 0
 fi
 

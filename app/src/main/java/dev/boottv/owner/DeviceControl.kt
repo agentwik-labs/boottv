@@ -18,6 +18,8 @@ object DeviceControl {
     private const val TAG = "DeviceControl"
     private const val PREFS = "device_control"
     private const val KEY_HIDDEN = "hidden_packages"
+    /** The viewer's choice in Settings (on unless they switch it off). */
+    private const val KEY_HIDE_WANTED = "hide_stock"
 
     /** Google's home screens and the ad / recommendation / telemetry services that feed them. */
     val stockPackages = listOf(
@@ -44,11 +46,25 @@ object DeviceControl {
 
     fun isOwner(context: Context) = dpm(context).isDeviceOwnerApp(context.packageName)
 
+    /** Owner, but Android has dropped its admin component, so no setting can be applied (fix: tools/owner.sh). */
+    fun needsRepair(context: Context) = isOwner(context) && !dpm(context).isAdminActive(admin(context))
+
     /** Run once when BootTV becomes owner: permanent Home and the stock home screen hidden. */
     fun applyOnBecomingOwner(context: Context) {
         if (!isOwner(context)) return
         setPermanentHome(context)
         setStockHidden(context, true)
+    }
+
+    /**
+     * Re-applies control at every start (app launch, TV restart, after an update): a BootTV update or a Google update
+     * can reset the permanent Home and bring the stock home screen back, so Home would open Google's launcher again.
+     */
+    fun ensure(context: Context) {
+        if (!isOwner(context)) return
+        runCatching { setPermanentHome(context) }.onFailure { Log.w(TAG, "home", it) }
+        val wanted = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_HIDE_WANTED, true)
+        if (wanted) runCatching { setStockHidden(context, true) }.onFailure { Log.w(TAG, "hide", it) }
     }
 
     /** Home always opens BootTV, whatever other launchers are installed or come back with an update. */
@@ -80,7 +96,7 @@ object DeviceControl {
                 .onSuccess { ok -> if (ok) { changed++; if (hide) done += pkg else done -= pkg } }
                 .onFailure { Log.w(TAG, "hide $pkg", it) }
         }
-        prefs.edit().putStringSet(KEY_HIDDEN, done).apply()
+        prefs.edit().putStringSet(KEY_HIDDEN, done).putBoolean(KEY_HIDE_WANTED, hide).apply()
         return changed
     }
 

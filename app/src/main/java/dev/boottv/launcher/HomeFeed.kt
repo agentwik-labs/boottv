@@ -62,6 +62,7 @@ import dev.boottv.livetv.LiveState
 import dev.boottv.livetv.LiveTvRepository
 import dev.boottv.livetv.Programme
 import dev.boottv.livetv.animationChannels
+import dev.boottv.livetv.pokemonChannels
 import dev.boottv.livetv.LiveVideoSurface
 import dev.boottv.livetv.PlayerLifecycle
 import dev.boottv.livetv.createLivePlayer
@@ -107,6 +108,9 @@ internal object HomeFeed {
         private set
     var cartoons by mutableStateOf<List<OnNow>>(emptyList())
         private set
+    /** The official Pokémon channels (shown on Home in the Pocket Monsters theme). */
+    var pokemon by mutableStateOf<List<OnNow>>(emptyList())
+        private set
     /** True once the first load finished (rows may still be empty). */
     var loaded by mutableStateOf(false)
         private set
@@ -141,6 +145,7 @@ internal object HomeFeed {
         if (!state.loaded) return
         onNow = pickOnNow(state)
         cartoons = pickCartoons(state)
+        pokemon = state.onNow(state.pokemonChannels())
     }
 
     /** Anime and cartoon channels from the free live feeds (anime first). */

@@ -35,30 +35,82 @@ object AccentPresets {
     fun byId(id: String?): AccentPreset = all.firstOrNull { it.id == id } ?: default
 }
 
+/** A look for the whole app (Settings > Home screen > Theme). */
+data class ThemePreset(
+    val id: String,
+    val name: String,
+    val background: Color,
+    val surface: Color,
+    val surfaceRaised: Color,
+    val textPrimary: Color,
+    val textSecondary: Color,
+    val live: Color,
+    /** Focused buttons, menu entries and guide cells. */
+    val focused: Color,
+    val onFocused: Color,
+    /** The soft light around a focused card. */
+    val glow: Color,
+    /** Fixed accent, or null to use the accent colour picked in Settings. */
+    val accent: Color? = null,
+    /** Rounded display face for titles (body text stays Inter). */
+    val playful: Boolean = false,
+)
+
+object ThemePresets {
+    /** Quiet, near-black greys in the spirit of Apple TV: colour comes from the artwork, not the chrome. */
+    val Minimal = ThemePreset(
+        id = "minimal", name = "Minimal",
+        background = Color(0xFF0A0A0C), surface = Color(0xFF1C1C1E), surfaceRaised = Color(0xFF2C2C2E),
+        textPrimary = Color(0xFFF5F5F7), textSecondary = Color(0xFF8E8E93), live = Color(0xFFFF453A),
+        focused = Color(0xFFF5F5F7), onFocused = Color(0xFF111114), glow = Color.White.copy(alpha = 0.32f),
+    )
+
+    /**
+     * Pokémon-inspired, drawn from scratch (no Nintendo artwork): a night-battle indigo, Poké Ball red, and
+     * electric yellow for whatever has focus.
+     */
+    val Pocket = ThemePreset(
+        id = "pocket", name = "Pocket Monsters",
+        background = Color(0xFF141A3C), surface = Color(0xFF212A5E), surfaceRaised = Color(0xFF2D3878),
+        textPrimary = Color(0xFFFFFFFF), textSecondary = Color(0xFFB4BEFF), live = Color(0xFFEE1515),
+        focused = Color(0xFFFFCB05), onFocused = Color(0xFF1B1B1F), glow = Color(0xFFFFCB05).copy(alpha = 0.45f),
+        accent = Color(0xFFEE1515), playful = true,
+    )
+
+    val all = listOf(Pocket, Minimal)
+    val default = Pocket
+    fun byId(id: String?): ThemePreset = all.firstOrNull { it.id == id } ?: default
+}
+
 /**
  * Shared palette. Feature code should use these (or MaterialTheme.colorScheme) instead of raw colors.
  *
- * [Accent] and [AccentSoft] are backed by Compose snapshot state, so composables that read them
- * recompose automatically when the user picks a new accent color in Settings.
+ * Backed by Compose snapshot state, so composables that read them recompose automatically when the theme or
+ * accent colour changes in Settings.
  */
 object BootColors {
     private val accentState = mutableStateOf(AccentPresets.default.color)
+    private val themeState = mutableStateOf(ThemePresets.default)
 
-    // Quiet, near-black greys in the spirit of Apple TV: colour comes from the artwork, not the chrome.
-    val Background = Color(0xFF0A0A0C)
-    val Surface = Color(0xFF1C1C1E)
-    val SurfaceRaised = Color(0xFF2C2C2E)
-    val Accent: Color get() = accentState.value
-    val AccentSoft: Color get() = accentState.value.copy(alpha = 0.2f)
-    val TextPrimary = Color(0xFFF5F5F7)
-    val TextSecondary = Color(0xFF8E8E93)
-    val Live = Color(0xFFFF453A)
-    /** Focused buttons and menu entries: white with dark text, as on Apple TV. */
-    val Focused = Color(0xFFF5F5F7)
-    val OnFocused = Color(0xFF111114)
+    val theme: ThemePreset get() = themeState.value
+    val Background: Color get() = theme.background
+    val Surface: Color get() = theme.surface
+    val SurfaceRaised: Color get() = theme.surfaceRaised
+    val Accent: Color get() = theme.accent ?: accentState.value
+    val AccentSoft: Color get() = Accent.copy(alpha = 0.2f)
+    val TextPrimary: Color get() = theme.textPrimary
+    val TextSecondary: Color get() = theme.textSecondary
+    val Live: Color get() = theme.live
+    val Focused: Color get() = theme.focused
+    val OnFocused: Color get() = theme.onFocused
+    val Glow: Color get() = theme.glow
 
     internal fun setAccent(color: Color) {
         if (accentState.value != color) accentState.value = color
+    }
+
+    internal fun setTheme(preset: ThemePreset) {
+        if (themeState.value != preset) themeState.value = preset
     }
 }
 
@@ -84,12 +136,18 @@ fun BootTheme(content: @Composable () -> Unit) {
     LaunchedEffect(Unit) {
         BootPrefs.accentIdFlow(context).collect { BootColors.setAccent(AccentPresets.byId(it).color) }
     }
+    LaunchedEffect(Unit) {
+        BootPrefs.themeIdFlow(context).collect { BootColors.setTheme(ThemePresets.byId(it)) }
+    }
     val accent = BootColors.Accent
+    val typography = if (BootColors.theme.playful) PlayfulTypography else BootTypography
     MaterialTheme(
-        typography = BootTypography,
+        typography = typography,
         colorScheme = darkColorScheme(
             primary = accent,
             onPrimary = Color.White,
+            secondaryContainer = BootColors.Focused,
+            onSecondaryContainer = BootColors.OnFocused,
             background = BootColors.Background,
             onBackground = BootColors.TextPrimary,
             surface = BootColors.Surface,
@@ -104,7 +162,7 @@ fun BootTheme(content: @Composable () -> Unit) {
         ),
     ) {
         // Every Text without its own style (many set only a size or weight) still gets Inter.
-        ProvideTextStyle(BootTypography.bodyLarge, content)
+        ProvideTextStyle(typography.bodyLarge, content)
     }
 }
 
@@ -138,5 +196,30 @@ private val BootTypography = Typography().run {
         labelLarge = labelLarge.inter(FontWeight.Medium),
         labelMedium = labelMedium.inter(FontWeight.Medium),
         labelSmall = labelSmall.inter(FontWeight.Medium),
+    )
+}
+
+/** Fredoka: a round, friendly face for the Pocket Monsters theme (SIL Open Font License, see assets/licenses). */
+val Fredoka = FontFamily(
+    Font(R.font.fredoka_medium, FontWeight.Medium),
+    Font(R.font.fredoka_semibold, FontWeight.SemiBold),
+    Font(R.font.fredoka_bold, FontWeight.Bold),
+)
+
+private fun TextStyle.fredoka(weight: FontWeight) = copy(fontFamily = Fredoka, fontWeight = weight, letterSpacing = 0.sp)
+
+/** Titles in Fredoka, everything you read at length still in Inter. */
+private val PlayfulTypography = BootTypography.run {
+    copy(
+        displayLarge = displayLarge.fredoka(FontWeight.Bold),
+        displayMedium = displayMedium.fredoka(FontWeight.Bold),
+        displaySmall = displaySmall.fredoka(FontWeight.Bold),
+        headlineLarge = headlineLarge.fredoka(FontWeight.Bold),
+        headlineMedium = headlineMedium.fredoka(FontWeight.SemiBold),
+        headlineSmall = headlineSmall.fredoka(FontWeight.SemiBold),
+        titleLarge = titleLarge.fredoka(FontWeight.SemiBold),
+        titleMedium = titleMedium.fredoka(FontWeight.SemiBold),
+        titleSmall = titleSmall.fredoka(FontWeight.Medium),
+        labelLarge = labelLarge.fredoka(FontWeight.SemiBold),
     )
 }

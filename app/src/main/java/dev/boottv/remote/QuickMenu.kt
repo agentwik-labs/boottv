@@ -47,7 +47,7 @@ class QuickMenu(private val service: AccessibilityService) {
         val font = runCatching { ResourcesCompat.getFont(service, R.font.inter_medium) }.getOrNull()
         val panel = object : LinearLayout(service) {
             override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-                if (event.keyCode == KeyEvent.KEYCODE_BACK || event.keyCode == KeyEvent.KEYCODE_ESCAPE) {
+                if (event.keyCode == KeyEvent.KEYCODE_BACK || event.keyCode == KeyEvent.KEYCODE_ESCAPE || event.keyCode == KeyEvent.KEYCODE_DEL) {
                     if (event.action == KeyEvent.ACTION_UP) hide()
                     return true
                 }
@@ -85,7 +85,7 @@ class QuickMenu(private val service: AccessibilityService) {
             if (first == null) first = item
         }
         panel.addView(TextView(service).apply {
-            text = "Back to close"
+            text = "Back to close · hold Back in any app to open"
             setTextColor(0xFF8E8E93.toInt())
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
             typeface = font

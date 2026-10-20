@@ -13,3 +13,10 @@ internal fun LiveState.animationChannels(): List<Channel> =
     channels.filter { ch -> ch.groups.any { it.lowercase() in animationGroups } || animationName.containsMatchIn(ch.name) }
         .sortedBy { if (it.isAnime()) 0 else if (it.isCartoon()) 1 else 2 }
         .distinctBy { it.name.lowercase() }
+
+private val pokemonName = Regex("""^pok[eé]mon\b""", RegexOption.IGNORE_CASE)
+
+/** The official Pokémon channels in the free line-ups (Pluto TV, Samsung TV Plus), not poker channels. */
+internal fun Channel.isPokemon() = pokemonName.containsMatchIn(name.trim())
+
+internal fun LiveState.pokemonChannels(): List<Channel> = channels.filter { it.isPokemon() }.distinctBy { it.name.lowercase() }

@@ -1,5 +1,6 @@
 package dev.boottv.launcher
 
+import dev.boottv.core.ui.PocketWordmark
 import dev.boottv.core.ui.BootCard
 import androidx.activity.compose.ReportDrawnWhen
 import dev.boottv.core.ui.leftToMenu
@@ -374,6 +375,17 @@ fun HomeScreen(nav: NavController) {
                 )
                 Spacer(Modifier.height(BootDimens.RowSpacing))
             }
+            if (BootColors.theme.playful && HomeFeed.pokemon.isNotEmpty()) {
+                OnNowRow(
+                    channels = HomeFeed.pokemon,
+                    requester = ::requester,
+                    onFocused = onFeedFocused,
+                    onWatch = { nav.navigate("live/play/${it.id}") },
+                    title = "Pokémon on now",
+                    keyPrefix = "feed:poke:",
+                )
+                Spacer(Modifier.height(BootDimens.RowSpacing))
+            }
             if (HomeFeed.cartoons.isNotEmpty()) {
                 OnNowRow(
                     channels = HomeFeed.cartoons,
@@ -619,8 +631,9 @@ private fun SectionTitle(text: String, hint: String? = null) {
 
 @Composable
 private fun HomeTopBar(movingLabel: String?, compact: Boolean = false) {
-    // No logo: like Apple TV, the artwork is the header. Just the clock, top right.
+    // Minimal: no logo, the artwork is the header (like Apple TV). Pocket Monsters: the wordmark, top left.
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        if (BootColors.theme.playful) { PocketWordmark(); Spacer(Modifier.width(24.dp)) }
         // With the content banner showing, the app-options hint moves down to the Apps title.
         if (compact) Spacer(Modifier.weight(1f)) else Text(
             if (movingLabel != null) {

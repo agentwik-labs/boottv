@@ -1,5 +1,6 @@
 package dev.boottv.settings
 
+import dev.boottv.core.ui.ThemePresets
 import dev.boottv.core.ui.BootDialog
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.material.icons.filled.AdminPanelSettings
@@ -326,6 +327,9 @@ private fun DeviceControlSection() {
     }
 
     InfoRow("Device owner", "BootTV controls this TV")
+    if (remember(tick) { DeviceControl.needsRepair(context) }) {
+        Note("⚠ Android has switched off BootTV's control (this can happen after a restore). On the Mac, run tools/owner.sh to repair it.")
+    }
     Note("Home always opens BootTV, even if another launcher is installed or an update brings one back.")
 
     val hidden = remember(tick) { DeviceControl.hiddenPackages(context) }
@@ -505,6 +509,11 @@ private fun HomeScreenSection(s: BootSettings) {
     }
     SettingButton("Favorites row", trailing = if (s.showFavorites) "On" else "Off") {
         scope.launch { BootPrefs.setShowFavorites(context, !s.showFavorites) }
+    }
+    SettingButton("Theme", trailing = ThemePresets.byId(s.themeId).name) {
+        val all = ThemePresets.all
+        val next = all[(all.indexOf(ThemePresets.byId(s.themeId)) + 1) % all.size]
+        scope.launch { BootPrefs.setTheme(context, next.id) }
     }
     SettingButton("Live preview on Home", trailing = if (s.livePreview) "On" else "Off") {
         scope.launch { BootPrefs.setLivePreview(context, !s.livePreview) }

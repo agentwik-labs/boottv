@@ -145,9 +145,11 @@ fun SideMenu(
             // Eight entries have to fit a 540 dp tall TV screen.
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Box(Modifier.height(48.dp).padding(start = 14.dp), contentAlignment = Alignment.CenterStart) {
-                if (expanded) {
-                    Text("BootTV", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = BootColors.TextPrimary, maxLines = 1)
+            Box(Modifier.height(48.dp).padding(start = 12.dp), contentAlignment = Alignment.CenterStart) {
+                when {
+                    BootColors.theme.playful && expanded -> PocketWordmark(fontSize = 22.sp, ball = 24.dp)
+                    BootColors.theme.playful -> BallEmblem(24.dp)
+                    expanded -> Text("BootTV", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = BootColors.TextPrimary, maxLines = 1)
                 }
             }
             Spacer(Modifier.height(12.dp))

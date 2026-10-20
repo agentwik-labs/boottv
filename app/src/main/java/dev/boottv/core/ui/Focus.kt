@@ -11,10 +11,10 @@ import androidx.tv.material3.Glow
 object BootCard {
     val scale @Composable get() = CardDefaults.scale(focusedScale = 1.1f)
     val border @Composable get() = CardDefaults.border(focusedBorder = Border.None)
-    val glow @Composable get() = CardDefaults.glow(focusedGlow = Glow(elevationColor = Color.White.copy(alpha = 0.32f), elevation = 24.dp))
+    val glow @Composable get() = CardDefaults.glow(focusedGlow = Glow(elevationColor = BootColors.Glow, elevation = 24.dp))
 
     /** For cards without full-bleed artwork: the surface brightens a step when focused. */
     @Composable
     fun colors(container: Color = BootColors.Surface) =
-        CardDefaults.colors(containerColor = container, focusedContainerColor = Color(0xFF48484A))
+        CardDefaults.colors(containerColor = container, focusedContainerColor = if (BootColors.theme.playful) Color(0xFF3B48A0) else Color(0xFF48484A))
 }

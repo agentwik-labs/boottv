@@ -8,6 +8,8 @@ class BootApp : Application() {
         instance = this
         dev.boottv.archive.ArchiveDownloads.init(this)
         dev.boottv.archive.ArchiveProgress.init(this)
+        // As device owner, make sure Home still leads to BootTV (an update can reset it).
+        dev.boottv.owner.DeviceControl.ensure(this)
     }
 
     companion object {

@@ -114,6 +114,7 @@ import dev.boottv.launcher.openFreeApp
 import dev.boottv.livetv.LiveTvRepository
 import dev.boottv.livetv.animationChannels
 import dev.boottv.livetv.isAnime
+import dev.boottv.livetv.pokemonChannels
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -253,7 +254,9 @@ fun ToonsScreen(nav: NavController) {
     val live by LiveTvRepository.state.collectAsState()
     val channels = remember(live) { live.animationChannels() }
     val installed = remember { ToonApps.filter { isInstalled(context, it.pkg) }.map { it.pkg }.toSet() }
+    val pokemon = remember(live) { live.pokemonChannels() }
     val rows = listOfNotNull(
+        pokemon.takeIf { it.isNotEmpty() }?.let { BrowseRow.Live("Pokémon · live now", live.onNow(it)) },
         channels.filter { it.isAnime() }.takeIf { it.isNotEmpty() }?.let { BrowseRow.Live("Anime · live now", live.onNow(it.take(24))) },
         channels.filter { !it.isAnime() }.takeIf { it.isNotEmpty() }?.let { BrowseRow.Live("Cartoons · live now", live.onNow(it.take(24))) },
         BrowseRow.Apps("More free anime", ToonApps.sortedBy { it.pkg !in installed }),

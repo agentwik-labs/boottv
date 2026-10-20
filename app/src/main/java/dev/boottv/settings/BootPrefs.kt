@@ -31,6 +31,7 @@ data class BootSettings(
     /** Home plays the focused live channel, muted, behind the banner. */
     val livePreview: Boolean = true,
     val accentId: String = "blue",
+    val themeId: String = "pocket",
     /** SHA-256 of the parental PIN, or null when no PIN is set. */
     val pinHash: String? = null,
     val pinForSettings: Boolean = false,
@@ -47,6 +48,7 @@ object BootPrefs {
     private val SHOW_FAVORITES = booleanPreferencesKey("show_favorites")
     private val LIVE_PREVIEW = booleanPreferencesKey("live_preview")
     private val ACCENT = stringPreferencesKey("accent")
+    private val THEME = stringPreferencesKey("theme")
     private val PIN = stringPreferencesKey("pin_hash")
     private val PIN_SETTINGS = booleanPreferencesKey("pin_for_settings")
 
@@ -61,6 +63,7 @@ object BootPrefs {
         showFavorites = this[SHOW_FAVORITES] ?: true,
         livePreview = this[LIVE_PREVIEW] ?: true,
         accentId = this[ACCENT] ?: "blue",
+        themeId = this[THEME] ?: "pocket",
         pinHash = this[PIN],
         pinForSettings = this[PIN_SETTINGS] ?: false,
     )
@@ -74,6 +77,8 @@ object BootPrefs {
         .distinctUntilChanged()
 
     fun accentIdFlow(context: Context): Flow<String> = flow(context).map { it.accentId }.distinctUntilChanged()
+
+    fun themeIdFlow(context: Context): Flow<String> = flow(context).map { it.themeId }.distinctUntilChanged()
 
     suspend fun current(context: Context): BootSettings = flow(context).first()
 
@@ -110,6 +115,8 @@ object BootPrefs {
         edit(context) { it[LIVE_PREVIEW] = on }
 
     suspend fun setAccent(context: Context, id: String) = edit(context) { it[ACCENT] = id }
+
+    suspend fun setTheme(context: Context, id: String) = edit(context) { it[THEME] = id }
 
     /** Sets a new PIN, or clears it (and all locks that depend on it) when [pin] is null. */
     suspend fun setPin(context: Context, pin: String?) = edit(context) {
