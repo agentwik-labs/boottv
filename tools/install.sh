@@ -1,10 +1,19 @@
 #!/usr/bin/env bash
-# Install dist/BootTV.apk on the device, make it the home screen, grant mic, launch it.
-#   tools/install.sh [serial]
+# Install dist/BootTV.apk on the device, make it the home screen, grant mic, add LocalSend, launch it.
+#   tools/install.sh [serial] [--no-localsend]
 set -euo pipefail
 . "$(cd "$(dirname "$0")" && pwd)/lib.sh"
 
-case "${1:-}" in -h|--help) sed -n '2,3p' "$0"; exit 0 ;; esac
+WITH_LOCALSEND=1
+ARGS=()
+for arg in "$@"; do
+  case "$arg" in
+    -h|--help) sed -n '2,3p' "$0"; exit 0 ;;
+    --no-localsend) WITH_LOCALSEND=0 ;;
+    *) ARGS+=("$arg") ;;
+  esac
+done
+set -- "${ARGS[@]+"${ARGS[@]}"}"
 
 require_adb
 [ -f "$APK_PATH" ] || die "$APK_PATH not found. Run tools/build.sh first."
@@ -59,6 +68,45 @@ else
      from the Amazon Appstore and map a remote button (or double-press Home)
      to "Launch app -> BootTV".
 EOF
+  fi
+fi
+
+# LocalSend: drop videos onto the TV from a Mac or phone over Wi-Fi (they show up in BootTV's My Videos channel).
+# Pinned release, checked against LocalSend's signing certificate before installing.
+LOCALSEND_VERSION="1.18.2"
+LOCALSEND_CERT_SHA256="3220c353a73cfbd0c2f3052471c445324cf452bcba26de1c473a52fe5c44e1d6"
+if [ "$WITH_LOCALSEND" = 1 ]; then
+  if dsh pm list packages 2>/dev/null | grep -q "org.localsend.localsend_app"; then
+    ok "LocalSend is already installed."
+  else
+    abi="$(dsh getprop ro.product.cpu.abi 2>/dev/null | tr -d '\r')"
+    case "$abi" in
+      arm64*) variant="arm64v8" ;;
+      armeabi*) variant="arm32v7" ;;
+      x86_64) variant="x64" ;;
+      *) variant="" ;;
+    esac
+    if [ -z "$variant" ]; then
+      warn "Skipping LocalSend: no build for this device ($abi)."
+    else
+      info "Installing LocalSend $LOCALSEND_VERSION ($variant) for sending videos from your Mac or phone"
+      ls_apk="$ROOT_DIR/dist/LocalSend-$LOCALSEND_VERSION-$variant.apk"
+      [ -f "$ls_apk" ] || curl -fsSL -o "$ls_apk" \
+        "https://github.com/localsend/localsend/releases/download/v$LOCALSEND_VERSION/LocalSend-$LOCALSEND_VERSION-android-$variant.apk" \
+        || { warn "Couldn't download LocalSend; skipping."; ls_apk=""; }
+      if [ -n "$ls_apk" ]; then
+        apksigner="$(ls -d "$ANDROID_HOME"/build-tools/*/ 2>/dev/null | tail -n 1)apksigner"
+        digest="$("$apksigner" verify --print-certs "$ls_apk" 2>/dev/null | sed -n 's/.*certificate SHA-256 digest: //p' | head -n 1)"
+        if [ "$digest" != "$LOCALSEND_CERT_SHA256" ]; then
+          rm -f "$ls_apk"
+          warn "LocalSend download isn't signed by LocalSend; not installing it."
+        elif dadb install -r "$ls_apk" >/dev/null 2>&1; then
+          ok "LocalSend installed. Open it on the TV, then send from LocalSend on your Mac or phone."
+        else
+          warn "Couldn't install LocalSend."
+        fi
+      fi
+    fi
   fi
 fi
 
