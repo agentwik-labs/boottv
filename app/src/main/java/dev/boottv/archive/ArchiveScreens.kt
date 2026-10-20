@@ -1,5 +1,6 @@
 package dev.boottv.archive
 
+import dev.boottv.core.ui.BootCard
 import dev.boottv.core.ui.leftToMenu
 import android.view.KeyEvent as AndroidKeyEvent
 import android.view.ViewGroup
@@ -319,12 +320,8 @@ private fun FreeBrowse(nav: NavController, section: String, badge: String, rows:
                 Modifier.fillMaxWidth().height(200.dp).padding(horizontal = BootDimens.PagePaddingH, vertical = BootDimens.PagePaddingV),
                 verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.Bottom),
             ) {
-                Text(
-                    badge,
-                    color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp,
-                    modifier = Modifier.background(Color(0xFF1F7A4A), RoundedCornerShape(4.dp)).padding(horizontal = 8.dp, vertical = 3.dp),
-                )
-                Text(banner.title, fontSize = 32.sp, fontWeight = FontWeight.Bold, color = BootColors.TextPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 700.dp))
+                Text(badge, color = BootColors.TextSecondary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.2.sp)
+                Text(banner.title, style = MaterialTheme.typography.displaySmall, fontSize = 36.sp, color = BootColors.TextPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 700.dp))
                 Text(banner.line, style = MaterialTheme.typography.bodyLarge, color = BootColors.TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 760.dp))
             }
             LazyColumn(
@@ -364,7 +361,7 @@ private fun liveBanner(entry: OnNow) = Banner(
 @Composable
 private fun TitlesRow(row: BrowseRow.Titles, requester: (String) -> FocusRequester, onFocused: (String, Banner) -> Unit, onOpen: (ArchiveItem) -> Unit) {
     Column {
-        Text(row.shelf.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = BootColors.TextPrimary,
+        Text(row.shelf.title, style = MaterialTheme.typography.titleMedium, color = BootColors.TextPrimary.copy(alpha = 0.9f),
             modifier = Modifier.padding(start = BootDimens.PagePaddingH))
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(BootDimens.CardSpacing),
@@ -390,8 +387,9 @@ private fun ArchiveCard(item: ArchiveItem, modifier: Modifier, onFocused: () -> 
             onClick = onClick,
             modifier = modifier.fillMaxWidth().aspectRatio(16f / 9f).onFocusChanged { if (it.isFocused) onFocused() },
             shape = CardDefaults.shape(CardShape),
-            scale = CardDefaults.scale(focusedScale = 1.08f),
-            border = CardDefaults.border(focusedBorder = Border(BorderStroke(3.dp, Color.White), shape = CardShape)),
+            scale = BootCard.scale,
+            border = BootCard.border,
+            glow = BootCard.glow,
         ) {
             Box(Modifier.fillMaxSize()) {
                 JfImage(item.thumbUrl, Modifier.fillMaxSize(), fallback = Icons.Filled.Movie)
@@ -451,7 +449,7 @@ private fun FreeDetail(nav: NavController, d: ArchiveDetails) {
             Modifier.fillMaxSize().padding(horizontal = BootDimens.PagePaddingH, vertical = 56.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(d.item.title, fontSize = 40.sp, fontWeight = FontWeight.Bold, color = BootColors.TextPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 760.dp))
+            Text(d.item.title, style = MaterialTheme.typography.displaySmall, fontSize = 42.sp, color = BootColors.TextPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 760.dp))
             val meta = listOfNotNull(d.item.year, d.runtime, d.creator?.take(60), d.license)
             Text(meta.joinToString("   ·   "), style = MaterialTheme.typography.bodyLarge, color = BootColors.TextSecondary)
             d.description?.let {

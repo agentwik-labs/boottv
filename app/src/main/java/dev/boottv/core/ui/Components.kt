@@ -1,6 +1,5 @@
 package dev.boottv.core.ui
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -50,15 +49,13 @@ import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import kotlinx.coroutines.delay
 
-/** Standard focus border used across BootTV focusable surfaces. */
+/** Focusable surfaces show focus by turning white (Apple TV style), so no outline. */
 @Composable
-fun bootFocusBorder(shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(10.dp)) =
-    ClickableSurfaceDefaults.border(
-        focusedBorder = Border(BorderStroke(3.dp, BootColors.Accent), shape = shape),
-    )
+fun bootFocusBorder(shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(12.dp)) =
+    ClickableSurfaceDefaults.border(focusedBorder = Border.None)
 
 /**
- * A D-pad friendly button/row: dark surface that lights up with the accent color when focused.
+ * A D-pad friendly button/row: a faint translucent surface that turns white with dark text when focused.
  */
 @Composable
 fun BootButton(
@@ -71,20 +68,20 @@ fun BootButton(
     trailing: String? = null,
     onLongClick: (() -> Unit)? = null,
 ) {
-    val shape = RoundedCornerShape(10.dp)
+    val shape = RoundedCornerShape(12.dp)
     Surface(
         onClick = onClick,
         onLongClick = onLongClick,
         enabled = enabled,
         modifier = modifier,
         shape = ClickableSurfaceDefaults.shape(shape),
-        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.03f),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.04f),
         border = bootFocusBorder(shape),
         colors = ClickableSurfaceDefaults.colors(
-            containerColor = if (selected) BootColors.AccentSoft else BootColors.SurfaceRaised,
+            containerColor = if (selected) BootColors.AccentSoft else Color.White.copy(alpha = 0.08f),
             contentColor = BootColors.TextPrimary,
-            focusedContainerColor = BootColors.Accent,
-            focusedContentColor = Color.White,
+            focusedContainerColor = BootColors.Focused,
+            focusedContentColor = BootColors.OnFocused,
             disabledContainerColor = BootColors.Surface,
             disabledContentColor = BootColors.TextSecondary,
         ),
@@ -291,8 +288,8 @@ private fun PinKey(modifier: Modifier, label: String?, icon: ImageVector?, onCli
         colors = ClickableSurfaceDefaults.colors(
             containerColor = BootColors.SurfaceRaised,
             contentColor = BootColors.TextPrimary,
-            focusedContainerColor = BootColors.Accent,
-            focusedContentColor = Color.White,
+            focusedContainerColor = BootColors.Focused,
+            focusedContentColor = BootColors.OnFocused,
         ),
     ) {
         Box(Modifier.fillMaxWidth().padding(4.dp).align(Alignment.Center), contentAlignment = Alignment.Center) {

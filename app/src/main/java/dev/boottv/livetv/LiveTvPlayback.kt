@@ -87,7 +87,7 @@ fun PlayerLifecycle(player: ExoPlayer) {
 /** Non-focusable video surface (never steals D-pad focus from Compose). */
 @OptIn(UnstableApi::class)
 @Composable
-fun LiveVideoSurface(player: ExoPlayer, modifier: Modifier = Modifier) {
+fun LiveVideoSurface(player: ExoPlayer, modifier: Modifier = Modifier, fill: Boolean = false) {
     AndroidView(
         modifier = modifier,
         factory = { ctx ->
@@ -97,7 +97,8 @@ fun LiveVideoSurface(player: ExoPlayer, modifier: Modifier = Modifier) {
                 isFocusable = false
                 isFocusableInTouchMode = false
                 descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
-                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                // [fill] crops to the frame (Home's preview); otherwise the whole picture, letterboxed.
+                resizeMode = if (fill) AspectRatioFrameLayout.RESIZE_MODE_ZOOM else AspectRatioFrameLayout.RESIZE_MODE_FIT
                 setShutterBackgroundColor(android.graphics.Color.BLACK)
                 setKeepContentOnPlayerReset(false)
                 this.player = player

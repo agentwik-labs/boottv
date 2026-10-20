@@ -41,6 +41,8 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.focusGroup
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -113,13 +115,22 @@ fun SideMenu(
         modifier
             .fillMaxHeight()
             .width(width)
-            .background(
+            // Collapsed it's just a column of quiet icons on the page; open, a dark scrim keeps the labels legible
+            // and fades out past the menu's edge instead of ending in a hard line.
+            .drawBehind {
                 if (expanded) {
-                    Brush.horizontalGradient(listOf(Color(0xF2070710), Color(0xE6070710)))
-                } else {
-                    Brush.horizontalGradient(listOf(Color(0xFF0E0E1A), Color(0xFF0E0E1A)))
-                },
-            )
+                    val fade = 320.dp.toPx()
+                    drawRect(
+                        Brush.horizontalGradient(
+                            0f to Color(0xF5000000),
+                            size.width / (size.width + fade) to Color(0xD9000000),
+                            1f to Color.Transparent,
+                            endX = size.width + fade,
+                        ),
+                        size = Size(size.width + fade, size.height),
+                    )
+                }
+            }
             .onFocusChanged { expanded = it.hasFocus }
             .focusProperties {
                 enter = { requesters[BootMenuItems[currentIndex].route] ?: FocusRequester.Default }
@@ -134,14 +145,10 @@ fun SideMenu(
             // Eight entries have to fit a 540 dp tall TV screen.
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Box(Modifier.height(48.dp).padding(start = 8.dp), contentAlignment = Alignment.CenterStart) {
-                Text(
-                    if (expanded) "BootTV" else "B",
-                    fontSize = 26.sp,
-                    fontWeight = FontWeight.Black,
-                    color = BootColors.Accent,
-                    maxLines = 1,
-                )
+            Box(Modifier.height(48.dp).padding(start = 14.dp), contentAlignment = Alignment.CenterStart) {
+                if (expanded) {
+                    Text("BootTV", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = BootColors.TextPrimary, maxLines = 1)
+                }
             }
             Spacer(Modifier.height(12.dp))
             BootMenuItems.forEach { item ->
@@ -170,19 +177,19 @@ private fun SideMenuEntry(
         onClick = onClick,
         modifier = modifier.fillMaxWidth().height(48.dp),
         shape = ClickableSurfaceDefaults.shape(shape),
-        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.04f),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.05f),
         colors = ClickableSurfaceDefaults.colors(
-            containerColor = if (selected) BootColors.AccentSoft else Color.Transparent,
-            contentColor = if (selected) BootColors.TextPrimary else BootColors.TextSecondary,
-            focusedContainerColor = BootColors.Accent,
-            focusedContentColor = Color.White,
+            containerColor = if (selected && expanded) Color.White.copy(alpha = 0.10f) else Color.Transparent,
+            contentColor = if (selected) BootColors.TextPrimary else BootColors.TextSecondary.copy(alpha = 0.8f),
+            focusedContainerColor = BootColors.Focused,
+            focusedContentColor = BootColors.OnFocused,
         ),
     ) {
         Row(
             Modifier.fillMaxHeight().padding(horizontal = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(item.icon, contentDescription = item.label, modifier = Modifier.size(24.dp))
+            Icon(item.icon, contentDescription = item.label, modifier = Modifier.size(22.dp))
             if (expanded) {
                 Spacer(Modifier.width(16.dp))
                 Text(

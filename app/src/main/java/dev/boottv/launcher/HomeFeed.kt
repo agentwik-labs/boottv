@@ -1,5 +1,6 @@
 package dev.boottv.launcher
 
+import dev.boottv.core.ui.BootCard
 import dev.boottv.core.ui.leftToMenu
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -173,14 +174,14 @@ internal fun BoxScope.HomeBackdrop(featured: Featured?, alpha: Float, livePrevie
     Box(
         Modifier
             .align(Alignment.TopEnd)
-            .fillMaxWidth(0.72f)
-            .height(430.dp)
+            .fillMaxWidth(0.8f)
+            .height(470.dp)
             .graphicsAlpha(alpha),
     ) {
         JfImage(url, Modifier.fillMaxSize(), plain = true, alignment = Alignment.TopCenter)
         Box(
             Modifier.fillMaxSize().background(
-                Brush.horizontalGradient(0f to BootColors.Background, 0.45f to BootColors.Background.copy(alpha = 0.55f), 1f to Color.Transparent)
+                Brush.horizontalGradient(0f to BootColors.Background, 0.4f to BootColors.Background.copy(alpha = 0.5f), 0.75f to Color.Transparent)
             )
         )
         Box(
@@ -191,7 +192,7 @@ internal fun BoxScope.HomeBackdrop(featured: Featured?, alpha: Float, livePrevie
     }
 }
 
-/** No artwork for live channels: a soft glow with the channel's logo, so the banner isn't a bare dark box. */
+/** No artwork for live channels: the channel's logo, until the live preview (if on) fades in over it. */
 @Composable
 private fun BoxScope.LiveBackdrop(channel: Channel, alpha: Float) {
     Box(
@@ -199,8 +200,7 @@ private fun BoxScope.LiveBackdrop(channel: Channel, alpha: Float) {
             .align(Alignment.TopEnd)
             .fillMaxWidth(0.6f)
             .height(400.dp)
-            .graphicsAlpha(alpha)
-            .background(Brush.radialGradient(listOf(BootColors.Accent.copy(alpha = 0.22f), Color.Transparent), radius = 900f)),
+            .graphicsAlpha(alpha),
     ) {
         if (channel.logo != null) {
             JfImage(
@@ -243,17 +243,19 @@ private fun BoxScope.LivePreview(channel: Channel, alpha: Float) {
     Box(
         Modifier
             .align(Alignment.TopEnd)
-            .fillMaxWidth(0.6f)
+            .fillMaxWidth(0.66f)
             .aspectRatio(16f / 9f),
     ) {
-        LiveVideoSurface(player, Modifier.fillMaxSize())
+        LiveVideoSurface(player, Modifier.fillMaxSize(), fill = true)
         Box(Modifier.fillMaxSize().background(BootColors.Background.copy(alpha = 1f - reveal * alpha.coerceIn(0f, 1f))))
+        // Dimmed and faded under the text, so a bright picture never washes out the title.
+        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.25f)))
         Box(
             Modifier.fillMaxSize().background(
-                Brush.horizontalGradient(0f to BootColors.Background, 0.35f to BootColors.Background.copy(alpha = 0.5f), 0.7f to Color.Transparent)
+                Brush.horizontalGradient(0f to BootColors.Background, 0.45f to BootColors.Background.copy(alpha = 0.75f), 0.85f to Color.Transparent)
             )
         )
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.6f to Color.Transparent, 1f to BootColors.Background)))
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.35f), 0.25f to Color.Transparent, 0.6f to Color.Transparent, 1f to BootColors.Background)))
     }
 }
 
@@ -267,7 +269,7 @@ internal fun HomeHero(featured: Featured) {
         when (featured) {
             is Featured.Media -> {
                 val item = featured.item
-                Badge(if (item.progress > 0f) "CONTINUE WATCHING" else "UP NEXT", BootColors.Accent)
+                Badge(if (item.progress > 0f) "CONTINUE WATCHING" else "UP NEXT", BootColors.TextSecondary)
                 val logo = featured.client.logoUrl(item, 500)
                 if (logo != null) {
                     JfImage(logo, Modifier.height(64.dp).widthIn(max = 340.dp).fillMaxWidth(), contentScale = ContentScale.Fit, plain = true, alignment = Alignment.CenterStart)
@@ -306,26 +308,31 @@ internal fun HomeHero(featured: Featured) {
     }
 }
 
+/** A small caption above the title; only LIVE gets a coloured pill, everything else is quiet grey text. */
 @Composable
 private fun Badge(text: String, color: Color) {
-    Text(
-        text,
-        color = Color.White,
-        fontSize = 12.sp,
-        fontWeight = FontWeight.Bold,
-        letterSpacing = 1.sp,
-        modifier = Modifier.background(color, RoundedCornerShape(4.dp)).padding(horizontal = 8.dp, vertical = 3.dp),
-    )
+    if (color == BootColors.Live) {
+        Text(
+            text,
+            color = Color.White,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.sp,
+            modifier = Modifier.background(color, RoundedCornerShape(50)).padding(horizontal = 9.dp, vertical = 2.dp),
+        )
+    } else {
+        Text(text, color = BootColors.TextSecondary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.2.sp)
+    }
 }
 
 @Composable
 private fun HeroTitle(text: String) {
-    Text(text, fontSize = 34.sp, fontWeight = FontWeight.Bold, color = BootColors.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 720.dp))
+    Text(text, style = MaterialTheme.typography.displaySmall, fontSize = 38.sp, color = BootColors.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 720.dp))
 }
 
 @Composable
 private fun Overview(text: String) {
-    Text(text, style = MaterialTheme.typography.bodyMedium, color = BootColors.TextPrimary.copy(alpha = 0.85f), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 640.dp))
+    Text(text, style = MaterialTheme.typography.bodyMedium, color = BootColors.TextPrimary.copy(alpha = 0.7f), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 600.dp))
 }
 
 /** "Continue Watching" row: OK opens the detail page (Resume is the first button there). */
@@ -376,11 +383,12 @@ internal fun OnNowRow(
                         .focusRequester(requester(k))
                         .onFocusChanged { if (it.isFocused) onFocused(k, Featured.Live(entry)) },
                     shape = CardDefaults.shape(CardShape),
-                    scale = CardDefaults.scale(focusedScale = 1.08f),
-                    border = CardDefaults.border(focusedBorder = Border(BorderStroke(3.dp, Color.White), shape = CardShape)),
-                    colors = CardDefaults.colors(containerColor = BootColors.SurfaceRaised),
+                    scale = BootCard.scale,
+                    border = BootCard.border,
+                    glow = BootCard.glow,
+                    colors = BootCard.colors(BootColors.SurfaceRaised),
                 ) {
-                    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(BootColors.SurfaceRaised, BootColors.Surface)))) {
+                    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.25f))))) {
                         ChannelLogo(entry.channel, Modifier.align(Alignment.Center).fillMaxWidth(0.62f).fillMaxHeight(0.52f))
                         Text(
                             entry.channel.number ?: "",
@@ -446,7 +454,7 @@ private fun ChannelLogo(channel: Channel, modifier: Modifier) {
 @Composable
 private fun FeedRow(title: String, content: androidx.compose.foundation.lazy.LazyListScope.() -> Unit) {
     Column(Modifier.fillMaxWidth()) {
-        Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = BootColors.TextPrimary)
+        Text(title, style = MaterialTheme.typography.titleMedium, color = BootColors.TextPrimary.copy(alpha = 0.9f))
         // Bleed the row to the right screen edge so it reads as scrollable; keep cards' focus scale unclipped.
         LazyRow(
             modifier = Modifier.fillMaxWidth(),

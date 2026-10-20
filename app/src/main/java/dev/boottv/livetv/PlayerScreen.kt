@@ -467,8 +467,8 @@ private fun ChannelListOverlay(
                         colors = ClickableSurfaceDefaults.colors(
                             containerColor = if (ch.id == currentId) BootColors.SurfaceRaised else Color.Transparent,
                             contentColor = BootColors.TextPrimary,
-                            focusedContainerColor = BootColors.Accent,
-                            focusedContentColor = Color.White,
+                            focusedContainerColor = BootColors.Focused,
+                            focusedContentColor = BootColors.OnFocused,
                         ),
                     ) {
                         Row(Modifier.padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {

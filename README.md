@@ -4,6 +4,10 @@ An ad-free, Roku-style home screen for Android TV / Google TV boxes. Fast grid o
 your apps, one search box for everything, free live TV, your own movie library,
 and none of the sponsored rows, "featured" ads or tracking that stock launchers ship with.
 
+The look is minimal and quiet, in the spirit of Apple TV: near-black greys, the Inter typeface,
+artwork-led banners, cards that lift and glow when focused instead of showing outlines, and an
+icon-only side rail that opens when you press Left.
+
 BootTV is a **launcher**: it replaces the device's home screen. Your streaming
 apps (Netflix, YouTube, Prime Video, Disney+, ...) keep working as normal apps.
 
@@ -18,6 +22,7 @@ apps (Netflix, YouTube, Prime Video, Disney+, ...) keep working as normal apps.
 | Media library | Netflix-style **My Media** powered by Jellyfin on your Mac ([setup guide](docs/jellyfin.md)) |
 | Web browsing | Built-in TV browser with **ad and tracker blocking** |
 | — | **Web apps**: pin any website to Home as an app tile (Add website, or Add to Home in the browser) |
+| — | **Works out of the box**: a fresh install adds the free Pluto TV, Samsung TV Plus, Plex and Roku Channel line-ups |
 | — | **Live preview**: the focused channel plays silently behind the Home banner (can be turned off in Settings) |
 | — | **Cartoons**: anime and cartoon channels live now, free anime apps (RetroCrush, Tubi, Pluto TV), and public-domain cartoons sorted by series (Popeye, Fleischer Superman, Betty Boop, Looney Tunes, Casper, silent-era Felix and early Mickey, Creative Commons shorts); a **Cartoons & Anime** filter in the Live TV guide |
 | — | **Free Movies**: public-domain and Creative Commons films from the Internet Archive, with search, downloads for offline viewing that keep going in the background (Archive's own torrents only), and Resume / Continue watching. A **rights check** hides anything archive.org doesn't list as public domain or Creative Commons, unless it came out in 1930 or earlier |

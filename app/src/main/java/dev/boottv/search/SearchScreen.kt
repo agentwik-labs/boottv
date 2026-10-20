@@ -372,7 +372,7 @@ private fun QueryBox(
                 focusedContentColor = BootColors.TextPrimary,
             ),
             border = ClickableSurfaceDefaults.border(
-                border = Border(BorderStroke(1.dp, BootColors.AccentSoft), shape = shape),
+                border = Border(BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)), shape = shape),
                 focusedBorder = Border(BorderStroke(2.dp, BootColors.Accent), shape = shape),
             ),
             scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
@@ -406,10 +406,10 @@ private fun KeyButton(
         modifier = modifier.size(width, KEY_H),
         shape = ClickableSurfaceDefaults.shape(shape),
         colors = ClickableSurfaceDefaults.colors(
-            containerColor = if (accent) BootColors.AccentSoft else BootColors.Surface,
+            containerColor = if (accent) BootColors.SurfaceRaised else BootColors.Surface,
             contentColor = BootColors.TextPrimary,
-            focusedContainerColor = BootColors.Accent,
-            focusedContentColor = Color.White,
+            focusedContainerColor = BootColors.Focused,
+            focusedContentColor = BootColors.OnFocused,
             pressedContainerColor = BootColors.Accent,
         ),
         border = ClickableSurfaceDefaults.border(
@@ -462,8 +462,8 @@ private fun ListButton(icon: ImageVector, text: String, onClick: () -> Unit, dim
         colors = ClickableSurfaceDefaults.colors(
             containerColor = Color.Transparent,
             contentColor = if (dim) BootColors.TextSecondary else BootColors.TextPrimary,
-            focusedContainerColor = BootColors.Accent,
-            focusedContentColor = Color.White,
+            focusedContainerColor = BootColors.Focused,
+            focusedContentColor = BootColors.OnFocused,
         ),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.02f),
     ) {
@@ -527,7 +527,7 @@ private fun ResultsList(
                     }
                     item {
                         ElsewhereCard("Web", "DuckDuckGo “$query”", Icons.Filled.Language,
-                            Brush.linearGradient(listOf(BootColors.Accent, Color(0xFF3A2A8C))), onWeb)
+                            Brush.linearGradient(listOf(BootColors.SurfaceRaised, BootColors.Surface)), onWeb)
                     }
                 }
             }
@@ -615,7 +615,7 @@ private fun FallbackTile(title: String) {
     Box(
         Modifier
             .fillMaxSize()
-            .background(Brush.linearGradient(listOf(BootColors.SurfaceRaised, BootColors.AccentSoft))),
+            .background(Brush.linearGradient(listOf(BootColors.SurfaceRaised, BootColors.Surface))),
         contentAlignment = Alignment.Center,
     ) {
         Text(

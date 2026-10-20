@@ -1,5 +1,6 @@
 package dev.boottv.jellyfin
 
+import dev.boottv.core.ui.BootCard
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -116,10 +117,9 @@ internal fun MediaCard(
                 .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
                 .onFocusChanged { if (it.isFocused) onFocused?.invoke() },
             shape = CardDefaults.shape(CardShape),
-            scale = CardDefaults.scale(focusedScale = 1.08f),
-            border = CardDefaults.border(
-                focusedBorder = Border(BorderStroke(3.dp, Color.White), shape = CardShape)
-            ),
+            scale = BootCard.scale,
+            border = BootCard.border,
+            glow = BootCard.glow,
         ) {
             Box(Modifier.fillMaxSize()) {
                 JfImage(url, Modifier.fillMaxSize(), fallback = if (item.isBrowsableFolder) Icons.Filled.Folder else Icons.Filled.Movie)

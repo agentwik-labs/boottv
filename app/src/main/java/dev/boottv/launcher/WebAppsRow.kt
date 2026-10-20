@@ -1,5 +1,6 @@
 package dev.boottv.launcher
 
+import dev.boottv.core.ui.BootCard
 import dev.boottv.core.ui.leftToMenu
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -142,8 +143,9 @@ private fun WebTile(
         onLongClick = onLongClick,
         modifier = modifier.width(BootDimens.WideCardWidth * 0.75f).aspectRatio(16f / 9f),
         shape = CardDefaults.shape(TileShape),
-        scale = CardDefaults.scale(focusedScale = 1.08f),
-        border = CardDefaults.border(focusedBorder = Border(BorderStroke(3.dp, Color.White), shape = TileShape)),
+        scale = BootCard.scale,
+        border = BootCard.border,
+        glow = BootCard.glow,
         colors = CardDefaults.colors(containerColor = color),
     ) {
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(color, color.copy(alpha = 0.7f)))), content = content)

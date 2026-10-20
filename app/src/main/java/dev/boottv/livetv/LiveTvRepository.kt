@@ -76,10 +76,23 @@ object LiveTvRepository {
     fun init() {
         if (initJob != null) return
         initJob = scope.launch {
+            val firstRun = !configFile.exists()
             try {
                 loadFromDisk()
             } catch (e: Exception) {
                 Log.w(TAG, "load failed", e)
+            }
+            // A fresh install starts with the free channel lists, so Live TV and Home's rows work out of the box.
+            // Any of them can be turned off or removed in Settings.
+            if (firstRun) {
+                mutateConfig { c ->
+                    c.copy(sources = SuggestedSources.map { sug ->
+                        LiveSource(
+                            id = UUID.randomUUID().toString().replace("-", "").take(10),
+                            name = sug.name, kind = SourceKind.M3U, url = sug.m3u, epgUrl = sug.epg,
+                        )
+                    })
+                }
             }
             publish()
             while (isActive) {

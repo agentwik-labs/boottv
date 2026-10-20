@@ -30,7 +30,7 @@ data class BootSettings(
     val showFavorites: Boolean = true,
     /** Home plays the focused live channel, muted, behind the banner. */
     val livePreview: Boolean = true,
-    val accentId: String = "purple",
+    val accentId: String = "blue",
     /** SHA-256 of the parental PIN, or null when no PIN is set. */
     val pinHash: String? = null,
     val pinForSettings: Boolean = false,
@@ -60,7 +60,7 @@ object BootPrefs {
         gridColumns = (this[COLUMNS] ?: 5).coerceIn(4, 5),
         showFavorites = this[SHOW_FAVORITES] ?: true,
         livePreview = this[LIVE_PREVIEW] ?: true,
-        accentId = this[ACCENT] ?: "purple",
+        accentId = this[ACCENT] ?: "blue",
         pinHash = this[PIN],
         pinForSettings = this[PIN_SETTINGS] ?: false,
     )

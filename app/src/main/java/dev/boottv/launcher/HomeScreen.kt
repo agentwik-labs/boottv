@@ -1,5 +1,6 @@
 package dev.boottv.launcher
 
+import dev.boottv.core.ui.BootCard
 import androidx.activity.compose.ReportDrawnWhen
 import dev.boottv.core.ui.leftToMenu
 import android.content.BroadcastReceiver
@@ -291,6 +292,8 @@ fun HomeScreen(nav: NavController) {
     var focusTick by remember { mutableIntStateOf(0) }
     var didInitialFocus by remember { mutableStateOf(false) }
     var homeHasFocus by remember { mutableStateOf(false) }
+    /** The card focus was put on automatically, until the viewer moves. */
+    var autoFocused by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(firstKey, focusTick) {
         if (firstKey == null) return@LaunchedEffect
         if (didInitialFocus && focusTick == 0) return@LaunchedEffect
@@ -306,8 +309,17 @@ fun HomeScreen(nav: NavController) {
             val restore = lastFocused?.takeIf { focusTick == 0 && requesters.containsKey(it) && attempt < 10 }
             val ok = runCatching { requester(restore ?: firstKey).requestFocus() }.isSuccess
             if (!ok) runCatching { requester(firstKey).requestFocus() }
+            if (restore == null) autoFocused = firstKey
         }
         didInitialFocus = true
+    }
+    // On a first start the live rows can arrive after focus went to the apps below. If the viewer hasn't moved yet,
+    // bring focus up to the first card so they start at the top.
+    LaunchedEffect(feedFirstKey) {
+        val target = feedFirstKey ?: return@LaunchedEffect
+        val auto = autoFocused ?: return@LaunchedEffect
+        if (auto.startsWith("feed:") || lastFocused != auto) return@LaunchedEffect
+        repeat(10) { delay(100); if (runCatching { requester(target).requestFocus() }.isSuccess) { autoFocused = target; return@LaunchedEffect } }
     }
 
     // Home key while already home: close everything and go back to the top.
@@ -597,24 +609,18 @@ private val MinimalScrollSpec = object : BringIntoViewSpec {
 @Composable
 private fun SectionTitle(text: String, hint: String? = null) {
     Row(verticalAlignment = Alignment.Bottom) {
-        Text(text, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = BootColors.TextPrimary)
+        Text(text, style = MaterialTheme.typography.titleMedium, color = BootColors.TextPrimary.copy(alpha = 0.9f))
         if (hint != null) {
             Spacer(Modifier.width(12.dp))
-            Text(hint, style = MaterialTheme.typography.bodySmall, color = BootColors.TextSecondary)
+            Text(hint, style = MaterialTheme.typography.bodySmall, color = BootColors.TextSecondary.copy(alpha = 0.7f))
         }
     }
 }
 
 @Composable
 private fun HomeTopBar(movingLabel: String?, compact: Boolean = false) {
+    // No logo: like Apple TV, the artwork is the header. Just the clock, top right.
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            "BootTV",
-            fontSize = 30.sp,
-            fontWeight = FontWeight.Black,
-            color = BootColors.Accent,
-        )
-        Spacer(Modifier.width(24.dp))
         // With the content banner showing, the app-options hint moves down to the Apps title.
         if (compact) Spacer(Modifier.weight(1f)) else Text(
             if (movingLabel != null) {
@@ -647,8 +653,8 @@ private fun Clock() {
     Column(horizontalAlignment = Alignment.End) {
         // Shadowed so it stays readable over bright backdrop artwork.
         val shadow = androidx.compose.ui.text.TextStyle(shadow = androidx.compose.ui.graphics.Shadow(Color(0xCC000000), blurRadius = 12f))
-        Text(timeFormat.format(now), fontSize = 28.sp, fontWeight = FontWeight.SemiBold, color = BootColors.TextPrimary, style = shadow)
-        Text(dateFormat.format(now), style = MaterialTheme.typography.bodyMedium.merge(shadow), color = BootColors.TextPrimary.copy(alpha = 0.75f))
+        Text(timeFormat.format(now), style = MaterialTheme.typography.headlineSmall.merge(shadow).copy(fontWeight = FontWeight.Medium), color = BootColors.TextPrimary)
+        Text(dateFormat.format(now), style = MaterialTheme.typography.bodySmall.merge(shadow), color = BootColors.TextPrimary.copy(alpha = 0.6f))
     }
 }
 
@@ -673,10 +679,9 @@ private fun TileGrid(columns: Int, spacing: Dp, content: @Composable () -> Unit)
     }
 }
 
-private val tilePalette = listOf(
-    Color(0xFF3A2D6B), Color(0xFF1F4E79), Color(0xFF1E5E4E), Color(0xFF6B2D4A),
-    Color(0xFF6B4A1E), Color(0xFF2D4A6B), Color(0xFF4A2D6B), Color(0xFF2D6B5E),
-)
+/** Apps without TV banner art sit on one quiet grey, so the icons carry the colour. */
+private val tileTop = Color(0xFF3A3A3C)
+private val tileBottom = Color(0xFF242426)
 
 @Composable
 private fun AppTile(
@@ -693,7 +698,7 @@ private fun AppTile(
     var art by remember(app.packageName) { mutableStateOf<AppArt?>(null) }
     LaunchedEffect(app.packageName) { art = AppRepository.loadArt(context, app) }
     var focused by remember { mutableStateOf(false) }
-    val shape = RoundedCornerShape(12.dp)
+    val shape = RoundedCornerShape(16.dp)
 
     Card(
         onClick = onClick,
@@ -720,11 +725,12 @@ private fun AppTile(
                 }
             },
         shape = CardDefaults.shape(shape),
-        scale = CardDefaults.scale(focusedScale = 1.08f),
+        scale = BootCard.scale,
         border = CardDefaults.border(
             border = if (moving) Border(BorderStroke(3.dp, BootColors.Accent), shape = shape) else Border.None,
-            focusedBorder = Border(BorderStroke(3.dp, if (moving) Color.White else BootColors.Accent), shape = shape),
+            focusedBorder = if (moving) Border(BorderStroke(3.dp, Color.White), shape = shape) else Border.None,
         ),
+        glow = BootCard.glow,
         colors = CardDefaults.colors(containerColor = BootColors.Surface),
     ) {
         Box(Modifier.fillMaxSize()) {
@@ -732,12 +738,11 @@ private fun AppTile(
             if (a != null && a.isBanner) {
                 Image(a.bitmap, contentDescription = app.label, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             } else {
-                val bg = tilePalette[(app.packageName.hashCode() and 0x7fffffff) % tilePalette.size]
                 Column(
                     Modifier
                         .fillMaxSize()
-                        .background(Brush.verticalGradient(listOf(bg, bg.copy(alpha = 0.75f))))
-                        .padding(8.dp),
+                        .background(Brush.verticalGradient(listOf(tileTop, tileBottom)))
+                        .padding(horizontal = 8.dp, vertical = 12.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                 ) {

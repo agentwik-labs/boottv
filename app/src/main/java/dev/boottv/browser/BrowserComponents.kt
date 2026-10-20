@@ -42,8 +42,8 @@ internal fun BrowserIconButton(
         colors = ClickableSurfaceDefaults.colors(
             containerColor = if (active) BootColors.AccentSoft else Color.Transparent,
             contentColor = if (enabled) BootColors.TextPrimary else BootColors.TextSecondary.copy(alpha = 0.5f),
-            focusedContainerColor = BootColors.Accent,
-            focusedContentColor = Color.White,
+            focusedContainerColor = BootColors.Focused,
+            focusedContentColor = BootColors.OnFocused,
             pressedContainerColor = BootColors.Accent,
         ),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.12f),
@@ -73,8 +73,8 @@ internal fun BrowserSurfaceButton(
         colors = ClickableSurfaceDefaults.colors(
             containerColor = container,
             contentColor = BootColors.TextPrimary,
-            focusedContainerColor = BootColors.Accent,
-            focusedContentColor = Color.White,
+            focusedContainerColor = BootColors.Focused,
+            focusedContentColor = BootColors.OnFocused,
             pressedContainerColor = BootColors.Accent,
         ),
         border = ClickableSurfaceDefaults.border(

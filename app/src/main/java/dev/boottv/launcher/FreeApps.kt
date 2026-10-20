@@ -1,5 +1,6 @@
 package dev.boottv.launcher
 
+import dev.boottv.core.ui.BootCard
 import dev.boottv.core.ui.leftToMenu
 import android.content.ActivityNotFoundException
 import android.content.Context
@@ -118,8 +119,9 @@ internal fun FreeAppsRow(
                         .focusRequester(requester(k))
                         .onFocusChanged { if (it.isFocused) onFocused(k, Featured.App(app)) },
                     shape = CardDefaults.shape(TileShape),
-                    scale = CardDefaults.scale(focusedScale = 1.08f),
-                    border = CardDefaults.border(focusedBorder = Border(BorderStroke(3.dp, Color.White), shape = TileShape)),
+                    scale = BootCard.scale,
+                    border = BootCard.border,
+                    glow = BootCard.glow,
                     colors = CardDefaults.colors(containerColor = app.color),
                 ) {
                     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(app.color, app.color.copy(alpha = 0.7f))))) {

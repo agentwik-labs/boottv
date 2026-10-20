@@ -630,15 +630,15 @@ private fun GuideRow(
                 val isSel = isSelectedRow && ft >= b.start && ft < b.end
                 val airing = b.start <= now && b.end > now
                 val bg = when {
-                    isSel && gridFocused -> BootColors.Accent
+                    isSel && gridFocused -> BootColors.Focused
                     airing -> BootColors.SurfaceRaised
                     else -> BootColors.Surface
                 }
                 Box(
                     Modifier.offset(x = x).width(w).fillMaxHeight().padding(end = 2.dp)
-                        .clip(RoundedCornerShape(4.dp))
+                        .clip(RoundedCornerShape(8.dp))
                         .background(bg)
-                        .then(if (isSel) Modifier.border(2.dp, if (gridFocused) Color.White else BootColors.Accent, RoundedCornerShape(4.dp)) else Modifier)
+                        .then(if (isSel && !gridFocused) Modifier.border(1.5.dp, BootColors.TextSecondary, RoundedCornerShape(8.dp)) else Modifier)
                         .padding(horizontal = 8.dp),
                     contentAlignment = Alignment.CenterStart,
                 ) {
@@ -647,14 +647,14 @@ private fun GuideRow(
                             Text(
                                 (if (b.start < ws) "‹ " else "") + (b.programme?.title ?: channel.name),
                                 style = MaterialTheme.typography.labelLarge,
-                                color = if (isSel && gridFocused) Color.White else BootColors.TextPrimary,
+                                color = if (isSel && gridFocused) BootColors.OnFocused else BootColors.TextPrimary,
                                 maxLines = 1, overflow = TextOverflow.Ellipsis,
                             )
                             if (w > 110.dp && b.programme != null) {
                                 Text(
                                     "${fmt.t(b.start)} – ${fmt.t(b.end)}",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = if (isSel && gridFocused) Color.White.copy(alpha = 0.85f) else BootColors.TextSecondary,
+                                    color = if (isSel && gridFocused) BootColors.OnFocused.copy(alpha = 0.7f) else BootColors.TextSecondary,
                                     maxLines = 1,
                                 )
                             }
