@@ -93,6 +93,9 @@ class BrowserState(
     private val scope: CoroutineScope,
     private val onExit: () -> Unit,
 ) {
+    /** Opens BootTV's side menu (Left at the page's left edge). */
+    var onMenu: (() -> Unit)? = null
+
     private val activity: Activity? = context.findActivity()
     private val density = context.resources.displayMetrics.density
     private val defaultUa: String = runCatching { WebSettings.getDefaultUserAgent(context) }.getOrDefault("")
@@ -551,6 +554,12 @@ class BrowserState(
                 if (e.repeatCount == 0) {
                     if (dir == DIR_UP && cursor.y <= 2f && !webView.canScrollVertically(-1)) {
                         showToolbar()
+                        return true
+                    }
+                    // At the left edge with nothing more to scroll: Left goes to the side menu, as everywhere else.
+                    val menu = onMenu
+                    if (dir == DIR_LEFT && menu != null && cursor.x <= 2f && !webView.canScrollHorizontally(-1)) {
+                        menu()
                         return true
                     }
                     heldMask = heldMask or dir

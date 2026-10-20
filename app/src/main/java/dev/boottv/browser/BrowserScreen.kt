@@ -1,5 +1,7 @@
 package dev.boottv.browser
 
+import dev.boottv.core.ui.LocalSideMenuFocus
+import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
@@ -133,6 +135,8 @@ private fun BrowserContent(nav: NavController, initialUrl: String?) {
 
     DisposableEffect(Unit) { onDispose { state.destroy() } }
     BackHandler { state.handleBack() }
+    val sideMenu = LocalSideMenuFocus.current
+    SideEffect { state.onMenu = sideMenu?.let { m -> { runCatching { m.requestFocus() } } } }
 
     LaunchedEffect(Unit) {
         val s = store.settings.first()
@@ -615,7 +619,7 @@ private fun MessagePill(state: BrowserState, modifier: Modifier) {
         if (!hintShown && state.url.startsWith("http")) {
             hintShown = true
             delay(1500)
-            state.toast("Press ▲ at the top of the page (or Menu) for the toolbar")
+            state.toast("▲ at the top for the toolbar · hold ◀ for the BootTV menu · Back to leave")
         }
     }
     AnimatedVisibility(visible, enter = fadeIn(), exit = fadeOut(), modifier = modifier.padding(bottom = 36.dp)) {
