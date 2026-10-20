@@ -29,6 +29,7 @@ apps (Netflix, YouTube, Prime Video, Disney+, ...) keep working as normal apps.
 | — | **My channels**: turn your own movies and shows (My Media library, or videos copied to the TV / a USB drive) into channels that play around the clock, in the guide and on Home (Settings › Live TV) |
 | — | **Remote hot buttons**: Guide/TV opens the guide, Channel ▲▼ jumps to the last channel, and any spare remote button can open a section or one of your channels, inside BootTV or (with the optional accessibility setting) from any app (Settings › Remote buttons) |
 | — | **Device control** (optional): BootTV becomes the stick's device owner (`tools/owner.sh` on a freshly reset stick), so Home always opens it, Google's home screen and ad services stay hidden even after updates, an optional lockdown blocks factory reset / safe mode / new users, and you choose when system updates install. Fully reversible in Settings › Device control |
+| — | **Your TV provider (Spectrum)**: get or open the Spectrum TV app from Settings › Live TV; optionally the Live TV menu and the remote's Guide button open Spectrum; pin it to Home or a remote button |
 | Screensaver | Built-in screensaver (clock/photo), no ads |
 | Parental controls | **Parental PIN** for locked apps and settings |
 | Settings | Theme, rows, apps, live TV sources, My Media server, PIN |

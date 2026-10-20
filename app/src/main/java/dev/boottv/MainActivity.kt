@@ -47,6 +47,7 @@ import dev.boottv.launcher.HomeScreen
 import dev.boottv.launcher.HomeSignals
 import dev.boottv.livetv.liveTvGraph
 import dev.boottv.livetv.LiveTvRepository
+import dev.boottv.livetv.TvProvider
 import dev.boottv.remote.RemoteButtons
 import androidx.compose.runtime.SideEffect
 import dev.boottv.search.SearchScreen
@@ -143,6 +144,8 @@ class MainActivity : ComponentActivity() {
                             currentRoute = topLevel,
                             onSelect = { target ->
                                 when {
+                                    // Live TV can be set to open the TV provider's app (Settings › Live TV).
+                                    target == Routes.LIVE && TvProvider.liveOpensProvider(this@MainActivity) -> TvProvider.open(this@MainActivity)
                                     target != topLevel -> nav.navigateTopLevel(target)
                                     // On a nested screen of this section: go back to its root.
                                     route?.substringBefore('?') != target.substringBefore('?') ->
@@ -176,6 +179,7 @@ class MainActivity : ComponentActivity() {
 
     /** Goes to [route]; "last channel" becomes the channel watched last (or the first one). */
     private fun openRoute(route: String) {
+        if (route == TvProvider.ROUTE) { TvProvider.open(this); return }
         val target = if (route == RemoteButtons.LAST_CHANNEL) {
             val s = LiveTvRepository.state.value
             val id = s.lastChannelId?.takeIf { s.channel(it) != null } ?: s.channels.firstOrNull()?.id
@@ -194,7 +198,7 @@ class MainActivity : ComponentActivity() {
         val inPlayer = currentRoute?.startsWith("live/play") == true
         val hot = RemoteButtons.mappings.value[code]?.route ?: when (code) {
             // Hot keys that work in BootTV without any setup.
-            KeyEvent.KEYCODE_GUIDE, KeyEvent.KEYCODE_TV -> Routes.LIVE
+            KeyEvent.KEYCODE_GUIDE, KeyEvent.KEYCODE_TV -> if (TvProvider.liveOpensProvider(this)) TvProvider.ROUTE else Routes.LIVE
             KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_CHANNEL_DOWN, KeyEvent.KEYCODE_LAST_CHANNEL ->
                 RemoteButtons.LAST_CHANNEL.takeIf { !inPlayer } // the player changes channel with these itself
             else -> null

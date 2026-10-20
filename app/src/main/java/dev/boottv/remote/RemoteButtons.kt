@@ -7,6 +7,7 @@ import android.provider.Settings
 import android.view.KeyEvent
 import dev.boottv.MainActivity
 import dev.boottv.core.Routes
+import dev.boottv.livetv.TvProvider
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -27,6 +28,7 @@ object RemoteButtons {
         ButtonAction("Home", Routes.HOME),
         ButtonAction("Live TV guide", Routes.LIVE),
         ButtonAction("Last channel watched", LAST_CHANNEL),
+        ButtonAction(TvProvider.NAME, TvProvider.ROUTE),
         ButtonAction("Cartoons", Routes.TOONS),
         ButtonAction("Free Movies", Routes.FREE),
         ButtonAction("My Media", Routes.MEDIA),
