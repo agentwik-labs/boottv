@@ -24,6 +24,8 @@ class RemoteButtonsService : AccessibilityService() {
     private var foreground: String? = null
     private var backPending = false
     private var backWasLong = false
+    private var delPending = false
+    private val longDel = Runnable { if (delPending) { delPending = false; menu.show() } }
     private val longBack = Runnable {
         if (backPending) { backPending = false; backWasLong = true; menu.show() }
     }
@@ -58,9 +60,13 @@ class RemoteButtonsService : AccessibilityService() {
         if ((code == KeyEvent.KEYCODE_BACK || code == KeyEvent.KEYCODE_ESCAPE) && foreground != packageName) return holdBack(event)
         // Backspace stays "delete" (one press reaches the app), but holding it opens the menu too: on a keyboard it's
         // the key people reach for to go back, and some apps (Spectrum) ignore it.
+        // Timed here: accessibility sees a held key as one down and one up (key repeats are made later, for apps).
         if (code == KeyEvent.KEYCODE_DEL && foreground != packageName) {
-            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 1) { menu.show(); return true }
-            return event.repeatCount > 0
+            when (event.action) {
+                KeyEvent.ACTION_DOWN -> { delPending = true; handler.postDelayed(longDel, LONG_MS) }
+                KeyEvent.ACTION_UP -> { handler.removeCallbacks(longDel); val wasLong = !delPending; delPending = false; if (wasLong) return true }
+            }
+            return false
         }
         // Android TV keeps the Guide and TV buttons for the system before apps see them; here they still arrive.
         val route = RemoteButtons.mappings.value[code]?.route ?: when (code) {
@@ -93,6 +99,8 @@ class RemoteButtonsService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             val pkg = event.packageName?.toString() ?: return
+            // Our own menu window isn't BootTV coming to the front; only BootTV's screen is.
+            if (pkg == packageName && event.className?.toString()?.endsWith("MainActivity") != true) return
             if (pkg != "com.android.systemui") foreground = pkg
         }
     }
