@@ -8,6 +8,10 @@ The look is minimal and quiet, in the spirit of Apple TV: near-black greys, the 
 artwork-led banners, cards that lift and glow when focused instead of showing outlines, and an
 icon-only side rail that opens when you press Left.
 
+Two looks (Settings › Home screen › Theme): **Pocket Monsters**, a playful Pokémon-inspired theme drawn
+from scratch (night-battle indigo, capture-ball red, electric-yellow focus, rounded Fredoka titles, and a
+"Pokémon on now" row of the official free Pokémon channels), and **Minimal**, the quiet Apple TV-style one.
+
 BootTV is a **launcher**: it replaces the device's home screen. Your streaming
 apps (Netflix, YouTube, Prime Video, Disney+, ...) keep working as normal apps.
 

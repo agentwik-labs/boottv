@@ -17,6 +17,8 @@ import android.widget.TextView
 import androidx.core.content.res.ResourcesCompat
 import dev.boottv.R
 import dev.boottv.core.Routes
+import dev.boottv.core.ui.BootColors
+import androidx.compose.ui.graphics.toArgb
 import dev.boottv.livetv.TvProvider
 
 /**
@@ -56,13 +58,14 @@ class QuickMenu(private val service: AccessibilityService) {
         }.apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(28), dp(16), dp(28))
-            background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(0xF5000000.toInt(), 0xE6000000.toInt()))
+            val bg = BootColors.Background
+            background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(bg.copy(alpha = 0.97f).toArgb(), bg.copy(alpha = 0.9f).toArgb()))
         }
         panel.addView(TextView(service).apply {
-            text = "BootTV"
-            setTextColor(Color.WHITE)
+            text = if (BootColors.theme.playful) "◓  BootTV" else "BootTV"
+            setTextColor(if (BootColors.theme.playful) 0xFFFFCB05.toInt() else Color.WHITE)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
-            typeface = runCatching { ResourcesCompat.getFont(service, R.font.inter_semibold) }.getOrNull()
+            typeface = runCatching { ResourcesCompat.getFont(service, if (BootColors.theme.playful) R.font.fredoka_bold else R.font.inter_semibold) }.getOrNull()
             setPadding(dp(14), 0, 0, dp(16))
         })
         var first: View? = null
@@ -75,10 +78,10 @@ class QuickMenu(private val service: AccessibilityService) {
                 isFocusable = true
                 isClickable = true
                 background = StateListDrawable().apply {
-                    addState(intArrayOf(android.R.attr.state_focused), GradientDrawable().apply { cornerRadius = dp(24).toFloat(); setColor(0xFFF5F5F7.toInt()) })
+                    addState(intArrayOf(android.R.attr.state_focused), GradientDrawable().apply { cornerRadius = dp(24).toFloat(); setColor(BootColors.Focused.toArgb()) })
                     addState(intArrayOf(), ColorDrawable(Color.TRANSPARENT))
                 }
-                setTextColor(android.content.res.ColorStateList(arrayOf(intArrayOf(android.R.attr.state_focused), intArrayOf()), intArrayOf(0xFF111114.toInt(), 0xFFF5F5F7.toInt())))
+                setTextColor(android.content.res.ColorStateList(arrayOf(intArrayOf(android.R.attr.state_focused), intArrayOf()), intArrayOf(BootColors.OnFocused.toArgb(), BootColors.TextPrimary.toArgb())))
                 setOnClickListener { hide(); RemoteButtons.open(service, route) }
             }
             panel.addView(item, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(4) })
@@ -86,7 +89,7 @@ class QuickMenu(private val service: AccessibilityService) {
         }
         panel.addView(TextView(service).apply {
             text = "Back to close · hold Back in any app to open"
-            setTextColor(0xFF8E8E93.toInt())
+            setTextColor(BootColors.TextSecondary.toArgb())
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
             typeface = font
             setPadding(dp(18), dp(14), 0, 0)

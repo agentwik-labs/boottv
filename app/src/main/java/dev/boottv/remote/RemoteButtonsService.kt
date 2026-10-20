@@ -11,6 +11,11 @@ import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
 import androidx.core.content.ContextCompat
 import dev.boottv.core.Routes
+import dev.boottv.core.ui.BootColors
+import dev.boottv.core.ui.ThemePresets
+import dev.boottv.settings.BootPrefs
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import dev.boottv.livetv.TvProvider
 
 /**
@@ -32,13 +37,18 @@ class RemoteButtonsService : AccessibilityService() {
         override fun onReceive(context: Context, intent: Intent) { menu.show() }
     }
 
+    private val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Main)
+
     override fun onServiceConnected() {
         RemoteButtons.load(this)
+        // The menu follows the chosen theme even if BootTV's screen hasn't been opened since the TV started.
+        scope.launch { BootPrefs.themeIdFlow(this@RemoteButtonsService).collect { BootColors.setTheme(ThemePresets.byId(it)) } }
         menu = QuickMenu(this)
         ContextCompat.registerReceiver(this, showReceiver, IntentFilter(ACTION_SHOW_MENU), "android.permission.DUMP", null, ContextCompat.RECEIVER_EXPORTED)
     }
 
     override fun onDestroy() {
+        scope.cancel()
         runCatching { unregisterReceiver(showReceiver) }
         if (::menu.isInitialized) menu.hide()
         super.onDestroy()

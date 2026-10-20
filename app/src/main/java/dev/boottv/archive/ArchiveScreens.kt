@@ -309,7 +309,8 @@ private fun FreeBrowse(nav: NavController, section: String, badge: String, rows:
         // Banner artwork for the focused card.
         Box(Modifier.align(Alignment.TopEnd).fillMaxWidth(0.62f).height(340.dp)) {
             if (banner.fit) {
-                Box(Modifier.fillMaxSize().padding(start = 220.dp, top = 40.dp, bottom = 120.dp, end = 80.dp)) {
+                // A channel logo sits small in the corner, clear of long programme titles.
+                Box(Modifier.align(Alignment.TopEnd).padding(top = 36.dp, end = 64.dp).width(200.dp).height(110.dp)) {
                     JfImage(banner.image, Modifier.fillMaxSize(), contentScale = ContentScale.Fit, plain = true, fallback = Icons.Filled.Movie)
                 }
             } else if (banner.image != null) {
