@@ -180,6 +180,7 @@ class MainActivity : ComponentActivity() {
     /** Goes to [route]; "last channel" becomes the channel watched last (or the first one). */
     private fun openRoute(route: String) {
         if (route == TvProvider.ROUTE) { TvProvider.open(this); return }
+        if (route == RemoteButtons.QUICK_MENU) return // inside BootTV the side menu is already there
         val target = if (route == RemoteButtons.LAST_CHANNEL) {
             val s = LiveTvRepository.state.value
             val id = s.lastChannelId?.takeIf { s.channel(it) != null } ?: s.channels.firstOrNull()?.id

@@ -413,6 +413,10 @@ private fun RemoteButtonsSection() {
         else -> BootButton("Add a button", modifier = first, onClick = { RemoteButtons.learned.value = null; RemoteButtons.learning.value = true })
     }
 
+    SubHeader("BootTV menu over any app")
+    Note("With the setting below on, hold Back for a second in any app (Spectrum, Netflix, YouTube…) and BootTV's menu " +
+        "opens on top of it. A normal press of Back still works as Back.")
+
     SubHeader("Use them in any app")
     Note(
         if (everywhere) "On: your buttons work everywhere, even while another app is open."

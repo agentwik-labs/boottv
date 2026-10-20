@@ -1,15 +1,47 @@
 package dev.boottv.remote
 
 import android.accessibilityservice.AccessibilityService
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.Handler
+import android.os.Looper
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
+import androidx.core.content.ContextCompat
 import dev.boottv.core.Routes
 import dev.boottv.livetv.TvProvider
 
-/** Watches only for the remote buttons assigned in Settings › Remote buttons and opens BootTV there. */
+/**
+ * Watches only for the remote buttons assigned in Settings › Remote buttons and opens BootTV there; holding Back in
+ * another app opens BootTV's menu on top of it.
+ */
 class RemoteButtonsService : AccessibilityService() {
+    private val handler = Handler(Looper.getMainLooper())
+    private lateinit var menu: QuickMenu
+    /** The app in front, from window changes (Back-hold does nothing new inside BootTV, which has its own menu). */
+    private var foreground: String? = null
+    private var backPending = false
+    private var backWasLong = false
+    private val longBack = Runnable {
+        if (backPending) { backPending = false; backWasLong = true; menu.show() }
+    }
+    /** Lets tools (adb, which holds DUMP) open the menu for testing; ordinary apps can't send this. */
+    private val showReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) { menu.show() }
+    }
+
     override fun onServiceConnected() {
         RemoteButtons.load(this)
+        menu = QuickMenu(this)
+        ContextCompat.registerReceiver(this, showReceiver, IntentFilter(ACTION_SHOW_MENU), "android.permission.DUMP", null, ContextCompat.RECEIVER_EXPORTED)
+    }
+
+    override fun onDestroy() {
+        runCatching { unregisterReceiver(showReceiver) }
+        if (::menu.isInitialized) menu.hide()
+        super.onDestroy()
     }
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
@@ -21,16 +53,48 @@ class RemoteButtonsService : AccessibilityService() {
             }
             return true
         }
+        if (::menu.isInitialized && menu.showing) return false // the menu window handles its own keys
+        // Esc too: keyboards (and the emulator) send it where a remote sends Back.
+        if ((code == KeyEvent.KEYCODE_BACK || code == KeyEvent.KEYCODE_ESCAPE) && foreground != packageName) return holdBack(event)
         // Android TV keeps the Guide and TV buttons for the system before apps see them; here they still arrive.
         val route = RemoteButtons.mappings.value[code]?.route ?: when (code) {
             KeyEvent.KEYCODE_GUIDE, KeyEvent.KEYCODE_TV -> if (TvProvider.liveOpensProvider(this)) TvProvider.ROUTE else Routes.LIVE
             else -> return false
         }
         // Act on release, and swallow the press too so the button's own app doesn't also open.
-        if (event.action == KeyEvent.ACTION_UP) RemoteButtons.open(this, route)
+        if (event.action == KeyEvent.ACTION_UP) {
+            if (route == RemoteButtons.QUICK_MENU) menu.show() else RemoteButtons.open(this, route)
+        }
         return true
     }
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
+    /** Back held for [LONG_MS] opens the menu; a normal press is passed on as Back. */
+    private fun holdBack(event: KeyEvent): Boolean {
+        when (event.action) {
+            KeyEvent.ACTION_DOWN -> if (event.repeatCount == 0) {
+                backPending = true; backWasLong = false
+                handler.postDelayed(longBack, LONG_MS)
+            }
+            KeyEvent.ACTION_UP -> {
+                handler.removeCallbacks(longBack)
+                if (backPending) { backPending = false; performGlobalAction(GLOBAL_ACTION_BACK) }
+                backWasLong = false
+            }
+        }
+        return true
+    }
+
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            val pkg = event.packageName?.toString() ?: return
+            if (pkg != "com.android.systemui") foreground = pkg
+        }
+    }
+
     override fun onInterrupt() {}
+
+    companion object {
+        const val ACTION_SHOW_MENU = "dev.boottv.SHOW_QUICK_MENU"
+        private const val LONG_MS = 600L
+    }
 }

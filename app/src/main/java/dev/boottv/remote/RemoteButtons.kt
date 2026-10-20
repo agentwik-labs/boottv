@@ -21,10 +21,13 @@ data class ButtonAction(val label: String, val route: String)
  */
 object RemoteButtons {
     const val LAST_CHANNEL = "live:last"
+    /** BootTV's menu over the current app (handled by the remote buttons service). */
+    const val QUICK_MENU = "overlay:menu"
     const val EXTRA_ROUTE = "dev.boottv.ROUTE"
     private const val PREFS = "remote_buttons"
 
     val fixedActions = listOf(
+        ButtonAction("BootTV menu (over any app)", QUICK_MENU),
         ButtonAction("Home", Routes.HOME),
         ButtonAction("Live TV guide", Routes.LIVE),
         ButtonAction("Last channel watched", LAST_CHANNEL),
