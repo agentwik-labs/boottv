@@ -56,6 +56,12 @@ class RemoteButtonsService : AccessibilityService() {
         if (::menu.isInitialized && menu.showing) return false // the menu window handles its own keys
         // Esc too: keyboards (and the emulator) send it where a remote sends Back.
         if ((code == KeyEvent.KEYCODE_BACK || code == KeyEvent.KEYCODE_ESCAPE) && foreground != packageName) return holdBack(event)
+        // Backspace stays "delete" (one press reaches the app), but holding it opens the menu too: on a keyboard it's
+        // the key people reach for to go back, and some apps (Spectrum) ignore it.
+        if (code == KeyEvent.KEYCODE_DEL && foreground != packageName) {
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 1) { menu.show(); return true }
+            return event.repeatCount > 0
+        }
         // Android TV keeps the Guide and TV buttons for the system before apps see them; here they still arrive.
         val route = RemoteButtons.mappings.value[code]?.route ?: when (code) {
             KeyEvent.KEYCODE_GUIDE, KeyEvent.KEYCODE_TV -> if (TvProvider.liveOpensProvider(this)) TvProvider.ROUTE else Routes.LIVE
