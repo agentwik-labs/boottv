@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -100,20 +101,37 @@ import dev.boottv.jellyfin.JfButton
 import dev.boottv.jellyfin.JfImage
 import dev.boottv.jellyfin.LoadingMessage
 import dev.boottv.jellyfin.formatClock
+import dev.boottv.launcher.FreeApp
+import dev.boottv.launcher.FreeAppsRow
+import dev.boottv.launcher.Featured
+import dev.boottv.launcher.OnNow
+import dev.boottv.launcher.OnNowRow
+import dev.boottv.launcher.ToonApps
+import dev.boottv.launcher.isInstalled
+import dev.boottv.launcher.onNow
+import dev.boottv.launcher.openFreeApp
+import dev.boottv.livetv.LiveTvRepository
+import dev.boottv.livetv.animationChannels
+import dev.boottv.livetv.isAnime
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 
-internal fun freeDetailRoute(id: String) = "${Routes.FREE}/detail/$id"
+internal fun freeDetailRoute(id: String) = archiveDetailRoute(Routes.FREE, id)
+/** Detail page under [section] (Free Movies or Cartoons), so the side menu keeps showing where you are. */
+private fun archiveDetailRoute(section: String, id: String) = "$section/detail/$id"
 internal fun freePlayRoute(id: String, restart: Boolean = false) = "${Routes.FREE}/play/$id?restart=$restart"
 
-/** Registers Routes.FREE and every "free/..." route. */
+/** Registers Routes.FREE, Routes.TOONS and their "free/..." and "toons/..." routes. */
 fun NavGraphBuilder.archiveGraph(nav: NavController) {
     composable(Routes.FREE) { FreeMoviesScreen(nav) }
-    composable("${Routes.FREE}/detail/{id}", arguments = listOf(navArgument("id") { type = NavType.StringType })) {
-        FreeDetailScreen(nav, it.arguments?.getString("id").orEmpty())
+    composable(Routes.TOONS) { ToonsScreen(nav) }
+    for (section in listOf(Routes.FREE, Routes.TOONS)) {
+        composable("$section/detail/{id}", arguments = listOf(navArgument("id") { type = NavType.StringType })) {
+            FreeDetailScreen(nav, it.arguments?.getString("id").orEmpty())
+        }
     }
     composable(
         "${Routes.FREE}/play/{id}?restart={restart}",
@@ -149,13 +167,65 @@ object ArchiveSearchProvider : SearchProvider {
 
 /** Shelves survive leaving the screen, so coming back is instant. */
 private object FreeCache {
+    /** By [ArchiveShelf.key]. */
     val shelves = mutableStateMapOf<String, List<ArchiveItem>>()
-    var error by mutableStateOf<String?>(null)
+    /** By section route. */
+    val errors = mutableStateMapOf<String, String>()
 }
 
 private val CardShape = RoundedCornerShape(12.dp)
-private val DownloadedShelf = ArchiveShelf("Downloaded · plays offline", "_downloaded")
-private val ContinueShelf = ArchiveShelf("Continue watching", "_continue")
+private val DownloadedShelf = ArchiveShelf("Downloaded · plays offline", "_downloaded", "")
+private val ContinueShelf = ArchiveShelf("Continue watching", "_continue", "")
+
+/** A row on a browse screen: archive.org titles, live channels or free apps. */
+private sealed interface BrowseRow {
+    val key: String
+    /** Focus key of the row's first card. */
+    val firstKey: String
+
+    data class Titles(val shelf: ArchiveShelf, val items: List<ArchiveItem>) : BrowseRow {
+        override val key = shelf.key
+        override val firstKey = titleKey(shelf, items.first())
+    }
+    data class Live(val title: String, val channels: List<OnNow>) : BrowseRow {
+        override val key = "live:$title"
+        val prefix = "live:$title:"
+        override val firstKey = prefix + channels.first().channel.id
+    }
+    data class Apps(val title: String, val apps: List<FreeApp>) : BrowseRow {
+        override val key = "apps:$title"
+        override val firstKey = "free:${apps.first().pkg}"
+    }
+}
+
+private fun titleKey(shelf: ArchiveShelf, item: ArchiveItem) = "t:${shelf.key}:${item.id}"
+
+/** What the banner at the top shows for the focused card. */
+private data class Banner(val title: String, val line: String, val image: String?, val fit: Boolean = false)
+
+private fun ArchiveItem.banner() = Banner(title, listOfNotNull(year, "Free · no account, no ads").joinToString("   ·   "), thumbUrl)
+
+/** Loads [shelves] once per process; true while the first load is still running. */
+@Composable
+private fun loadShelves(section: String, shelves: List<ArchiveShelf>, reload: Int): Boolean {
+    var loading by remember { mutableStateOf(shelves.any { it.key !in FreeCache.shelves }) }
+    LaunchedEffect(reload) {
+        if (shelves.all { it.key in FreeCache.shelves }) return@LaunchedEffect
+        loading = true
+        FreeCache.errors.remove(section)
+        val ok = coroutineScope {
+            shelves.map { shelf ->
+                async { runCatching { ArchiveClient.shelf(shelf) }.onSuccess { FreeCache.shelves[shelf.key] = it }.isSuccess }
+            }.awaitAll()
+        }
+        if (ok.none { it }) FreeCache.errors[section] = "Couldn't reach the Internet Archive. Check the connection and try again."
+        loading = false
+    }
+    return loading
+}
+
+private fun shelfRows(shelves: List<ArchiveShelf>) =
+    shelves.mapNotNull { s -> FreeCache.shelves[s.key]?.takeIf { it.isNotEmpty() }?.let { BrowseRow.Titles(s, it) } }
 
 // ---------------------------------------------------------------------------- browse
 
@@ -163,53 +233,84 @@ private val ContinueShelf = ArchiveShelf("Continue watching", "_continue")
 fun FreeMoviesScreen(nav: NavController) {
     var reload by remember { mutableStateOf(0) }
     // Show the rows only once every shelf has answered, so rows don't pop in above the focused one.
-    var loading by remember { mutableStateOf(FreeCache.shelves.size < ArchiveShelves.size) }
-    LaunchedEffect(reload) {
-        if (FreeCache.shelves.size == ArchiveShelves.size) return@LaunchedEffect
-        loading = true
-        FreeCache.error = null
-        val ok = coroutineScope {
-            ArchiveShelves.map { shelf ->
-                async { runCatching { ArchiveClient.shelf(shelf) }.onSuccess { FreeCache.shelves[shelf.collection] = it }.isSuccess }
-            }.awaitAll()
-        }
-        if (ok.none { it }) FreeCache.error = "Couldn't reach the Internet Archive. Check the connection and try again."
-        loading = false
-    }
-
+    val loading = loadShelves(Routes.FREE, ArchiveShelves, reload)
     val saved = ArchiveDownloads.items.values.filter { it.done }.map { ArchiveItem(it.id, it.title, it.year) }
     val resume = ArchiveProgress.continueWatching().map { ArchiveItem(it.id, it.title, it.year) }
-    val shelves = listOfNotNull(
-        resume.takeIf { it.isNotEmpty() }?.let { ContinueShelf to it },
-        saved.takeIf { it.isNotEmpty() }?.let { DownloadedShelf to it },
-    ) +
-        ArchiveShelves.mapNotNull { s -> FreeCache.shelves[s.collection]?.takeIf { it.isNotEmpty() }?.let { s to it } }
-    val error = FreeCache.error
+    val rows = listOfNotNull(
+        resume.takeIf { it.isNotEmpty() }?.let { BrowseRow.Titles(ContinueShelf, it) },
+        saved.takeIf { it.isNotEmpty() }?.let { BrowseRow.Titles(DownloadedShelf, it) },
+    ) + shelfRows(ArchiveShelves)
+    BrowseOrMessage(nav, Routes.FREE, "FREE MOVIES · INTERNET ARCHIVE", rows, loading && saved.isEmpty() && resume.isEmpty(), "Free Movies") { reload++ }
+}
+
+/** Anime and cartoons: live channels from the free feeds, free anime apps, and public-domain cartoons by series. */
+@Composable
+fun ToonsScreen(nav: NavController) {
+    val context = LocalContext.current
+    var reload by remember { mutableStateOf(0) }
+    val loading = loadShelves(Routes.TOONS, ToonShelves, reload)
+    val live by LiveTvRepository.state.collectAsState()
+    val channels = remember(live) { live.animationChannels() }
+    val installed = remember { ToonApps.filter { isInstalled(context, it.pkg) }.map { it.pkg }.toSet() }
+    val rows = listOfNotNull(
+        channels.filter { it.isAnime() }.takeIf { it.isNotEmpty() }?.let { BrowseRow.Live("Anime · live now", live.onNow(it.take(24))) },
+        channels.filter { !it.isAnime() }.takeIf { it.isNotEmpty() }?.let { BrowseRow.Live("Cartoons · live now", live.onNow(it.take(24))) },
+        BrowseRow.Apps("More free anime", ToonApps.sortedBy { it.pkg !in installed }),
+    ) + shelfRows(ToonShelves)
+    BrowseOrMessage(nav, Routes.TOONS, "CARTOONS & ANIME · FREE AND LEGAL", rows, loading && channels.isEmpty(), "Cartoons & Anime") { reload++ }
+}
+
+@Composable
+private fun BrowseOrMessage(nav: NavController, section: String, badge: String, rows: List<BrowseRow>, loading: Boolean, name: String, retry: () -> Unit) {
+    val error = FreeCache.errors[section]
     when {
-        loading && saved.isEmpty() && resume.isEmpty() -> LoadingMessage("Loading free movies…")
-        shelves.isEmpty() && error != null -> CenteredMessage("Free Movies", error) { fr ->
-            JfButton("Try again", Icons.Filled.Replay, primary = true, modifier = Modifier.focusRequester(fr), onClick = { reload++ })
+        loading -> LoadingMessage("Loading ${name.lowercase()}…")
+        rows.none { it is BrowseRow.Titles || it is BrowseRow.Live } && error != null -> CenteredMessage(name, error) { fr ->
+            JfButton("Try again", Icons.Filled.Replay, primary = true, modifier = Modifier.focusRequester(fr), onClick = retry)
         }
-        shelves.isEmpty() -> LoadingMessage("Nothing to show right now.")
-        else -> FreeBrowse(nav, shelves)
+        rows.isEmpty() -> LoadingMessage("Nothing to show right now.")
+        else -> FreeBrowse(nav, section, badge, rows)
     }
 }
 
 @Composable
-private fun FreeBrowse(nav: NavController, shelves: List<Pair<ArchiveShelf, List<ArchiveItem>>>) {
-    var focused by remember { mutableStateOf(shelves.first().second.first()) }
-    val first = remember { FocusRequester() }
+private fun FreeBrowse(nav: NavController, section: String, badge: String, rows: List<BrowseRow>) {
+    val context = LocalContext.current
+    var banner by remember {
+        mutableStateOf(when (val r = rows.first()) {
+            is BrowseRow.Titles -> r.items.first().banner()
+            is BrowseRow.Live -> liveBanner(r.channels.first())
+            is BrowseRow.Apps -> Banner(r.apps.first().name, r.apps.first().blurb, null)
+        })
+    }
+    val requesters = remember { mutableMapOf<String, FocusRequester>() }
+    fun requester(k: String) = requesters.getOrPut(k) { FocusRequester() }
+    val firstKey = rows.first().firstKey
     var firstFocused by remember { mutableStateOf(false) }
-    // Start on the top row's first card (Continue watching when there is one). Retry until it really has focus:
+    // Start on the top row's first card. Retry until it really has focus:
     // the side menu may still be closing, and coming back the focus system first restores the old card.
     LaunchedEffect(Unit) {
-        repeat(15) { delay(100); if (firstFocused) return@LaunchedEffect; runCatching { first.requestFocus() } }
+        repeat(15) { delay(100); if (firstFocused) return@LaunchedEffect; runCatching { requester(firstKey).requestFocus() } }
+    }
+    fun focused(k: String, b: Banner) { banner = b; if (k == firstKey) firstFocused = true }
+    val onFeatured: (String, Featured) -> Unit = { k, f ->
+        when (f) {
+            is Featured.Live -> focused(k, liveBanner(f.onNow))
+            is Featured.App -> focused(k, Banner(f.app.name, f.app.blurb, null))
+            else -> {}
+        }
     }
 
     Box(Modifier.fillMaxSize().background(BootColors.Background)) {
-        // Banner artwork for the focused title.
+        // Banner artwork for the focused card.
         Box(Modifier.align(Alignment.TopEnd).fillMaxWidth(0.62f).height(340.dp)) {
-            JfImage(focused.thumbUrl, Modifier.fillMaxSize(), plain = true)
+            if (banner.fit) {
+                Box(Modifier.fillMaxSize().padding(start = 220.dp, top = 40.dp, bottom = 120.dp, end = 80.dp)) {
+                    JfImage(banner.image, Modifier.fillMaxSize(), contentScale = ContentScale.Fit, plain = true, fallback = Icons.Filled.Movie)
+                }
+            } else if (banner.image != null) {
+                JfImage(banner.image, Modifier.fillMaxSize(), plain = true)
+            }
             Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to BootColors.Background, 0.5f to BootColors.Background.copy(alpha = 0.6f), 1f to Color.Transparent)))
             Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.5f to Color.Transparent, 1f to BootColors.Background)))
         }
@@ -219,12 +320,12 @@ private fun FreeBrowse(nav: NavController, shelves: List<Pair<ArchiveShelf, List
                 verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.Bottom),
             ) {
                 Text(
-                    "FREE MOVIES · INTERNET ARCHIVE",
+                    badge,
                     color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp,
                     modifier = Modifier.background(Color(0xFF1F7A4A), RoundedCornerShape(4.dp)).padding(horizontal = 8.dp, vertical = 3.dp),
                 )
-                Text(focused.title, fontSize = 32.sp, fontWeight = FontWeight.Bold, color = BootColors.TextPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 700.dp))
-                Text(listOfNotNull(focused.year, "Free · no account, no ads").joinToString("   ·   "), style = MaterialTheme.typography.bodyLarge, color = BootColors.TextSecondary)
+                Text(banner.title, fontSize = 32.sp, fontWeight = FontWeight.Bold, color = BootColors.TextPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 700.dp))
+                Text(banner.line, style = MaterialTheme.typography.bodyLarge, color = BootColors.TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 760.dp))
             }
             LazyColumn(
                 // Rows fade out as they scroll up under the banner instead of being cut off mid-card.
@@ -237,25 +338,46 @@ private fun FreeBrowse(nav: NavController, shelves: List<Pair<ArchiveShelf, List
                 contentPadding = PaddingValues(top = 8.dp, bottom = 48.dp),
                 verticalArrangement = Arrangement.spacedBy(BootDimens.RowSpacing),
             ) {
-                items(shelves, key = { it.first.collection }) { (shelf, items) ->
-                    Column {
-                        Text(shelf.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = BootColors.TextPrimary,
-                            modifier = Modifier.padding(start = BootDimens.PagePaddingH))
-                        LazyRow(
-                                                        horizontalArrangement = Arrangement.spacedBy(BootDimens.CardSpacing),
-                            contentPadding = PaddingValues(horizontal = BootDimens.PagePaddingH, vertical = 12.dp),
-                        ) {
-                            items(items, key = { it.id }) { item ->
-                                ArchiveCard(
-                                    item,
-                                    modifier = Modifier.leftToMenu(item == items.first()).let { if (shelf == shelves.first().first && item == items.first()) it.focusRequester(first) else it },
-                                    onFocused = { focused = item; if (shelf == shelves.first().first && item == items.first()) firstFocused = true },
-                                    onClick = { nav.navigate(freeDetailRoute(item.id)) },
-                                )
-                            }
+                items(rows, key = { it.key }) { row ->
+                    when (row) {
+                        is BrowseRow.Titles -> TitlesRow(row, ::requester, onFocused = ::focused, onOpen = { nav.navigate(archiveDetailRoute(section, it.id)) })
+                        is BrowseRow.Live -> Box(Modifier.padding(start = BootDimens.PagePaddingH)) {
+                            OnNowRow(row.channels, ::requester, onFeatured, onWatch = { nav.navigate("live/play/${it.id}") }, title = row.title, keyPrefix = row.prefix)
+                        }
+                        is BrowseRow.Apps -> Box(Modifier.padding(start = BootDimens.PagePaddingH)) {
+                            FreeAppsRow(row.apps, ::requester, onFeatured, onOpen = { openFreeApp(context, it) }, title = row.title)
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+private fun liveBanner(entry: OnNow) = Banner(
+    entry.now?.title ?: entry.channel.name,
+    listOfNotNull("LIVE", entry.channel.name, entry.next?.title?.takeIf { it != entry.now?.title }?.let { "Next: $it" }).joinToString("   ·   "),
+    entry.channel.logo,
+    fit = true,
+)
+
+@Composable
+private fun TitlesRow(row: BrowseRow.Titles, requester: (String) -> FocusRequester, onFocused: (String, Banner) -> Unit, onOpen: (ArchiveItem) -> Unit) {
+    Column {
+        Text(row.shelf.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = BootColors.TextPrimary,
+            modifier = Modifier.padding(start = BootDimens.PagePaddingH))
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(BootDimens.CardSpacing),
+            contentPadding = PaddingValues(horizontal = BootDimens.PagePaddingH, vertical = 12.dp),
+        ) {
+            items(row.items, key = { it.id }) { item ->
+                val k = titleKey(row.shelf, item)
+                ArchiveCard(
+                    item,
+                    modifier = Modifier.leftToMenu(item == row.items.first()).focusRequester(requester(k)),
+                    onFocused = { onFocused(k, item.banner()) },
+                    onClick = { onOpen(item) },
+                )
             }
         }
     }
@@ -300,7 +422,7 @@ fun FreeDetailScreen(nav: NavController, id: String) {
             .onFailure { e ->
                 // Offline but saved: show what we know.
                 val saved = ArchiveDownloads.items[id]?.takeIf { it.done }
-                if (saved != null) details = ArchiveDetails(ArchiveItem(id, saved.title, saved.year), null, null, null, "Saved on this device", null, null, null, null)
+                if (saved != null) details = ArchiveDetails(ArchiveItem(id, saved.title, saved.year), null, null, null, "Saved on this device", true, null, null, null, null)
                 else error = e.message ?: "Couldn't load this title."
             }
     }
@@ -340,7 +462,9 @@ private fun FreeDetail(nav: NavController, d: ArchiveDetails) {
             val download = ArchiveDownloads.states[d.item.id]
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 val resumeAt = ArchiveProgress.entries[d.item.id]
-                if ((d.videoUrl != null || local) && resumeAt != null) {
+                if (!d.cleared) {
+                    Text("Hidden: archive.org doesn't list this as public domain or Creative Commons.", color = BootColors.TextSecondary)
+                } else if ((d.videoUrl != null || local) && resumeAt != null) {
                     JfButton("Resume ${formatClock(resumeAt.positionMs)}", Icons.Filled.PlayArrow, primary = true, modifier = Modifier.focusRequester(play),
                         onClick = { nav.navigate(freePlayRoute(d.item.id)) })
                     JfButton("Start over", Icons.Filled.Replay, onClick = { nav.navigate(freePlayRoute(d.item.id, restart = true)) })
@@ -350,7 +474,7 @@ private fun FreeDetail(nav: NavController, d: ArchiveDetails) {
                     Text("No streamable video for this title.", color = BootColors.TextSecondary)
                 }
                 // One button whose label follows the download, so focus stays put as it changes.
-                val canDownload = d.torrentUrl != null && d.downloadUrl != null
+                val canDownload = d.cleared && d.torrentUrl != null && d.downloadUrl != null
                 if (local || download is DownloadState.Running || canDownload) {
                     val (label, icon) = when {
                         local -> "Delete download" to Icons.Filled.Delete
@@ -361,7 +485,8 @@ private fun FreeDetail(nav: NavController, d: ArchiveDetails) {
                         if (local || download is DownloadState.Running) ArchiveDownloads.cancelOrDelete(d.item.id) else ArchiveDownloads.download(d)
                     })
                 }
-                JfButton("Back", Icons.AutoMirrored.Filled.ArrowBack, onClick = { nav.popBackStack() })
+                val noPlay = !d.cleared || (d.videoUrl == null && !local)
+                JfButton("Back", Icons.AutoMirrored.Filled.ArrowBack, modifier = if (noPlay) Modifier.focusRequester(play) else Modifier, onClick = { nav.popBackStack() })
             }
             DownloadStatus(local, download)
             Text("From the Internet Archive (archive.org), free and legal to watch.", style = MaterialTheme.typography.bodySmall, color = BootColors.TextSecondary)
@@ -433,7 +558,7 @@ fun FreePlayerScreen(nav: NavController, id: String, restart: Boolean = false) {
         val local = ArchiveDownloads.localFile(id)
         if (local != null) {
             val saved = ArchiveDownloads.items.getValue(id)
-            details = ArchiveDetails(ArchiveItem(id, saved.title, saved.year), null, null, null, "Saved on this device", null, null, null, null)
+            details = ArchiveDetails(ArchiveItem(id, saved.title, saved.year), null, null, null, "Saved on this device", true, null, null, null, null)
             player.setMediaItem(MediaItem.fromUri(Uri.fromFile(local)))
             if (!restart) ArchiveProgress.entries[id]?.let { player.seekTo(it.positionMs) }
             player.prepare()
@@ -444,7 +569,8 @@ fun FreePlayerScreen(nav: NavController, id: String, restart: Boolean = false) {
             .onSuccess { d ->
                 details = d
                 val url = d.videoUrl
-                if (url == null) error = "No streamable video for this title." else {
+                if (!d.cleared) error = "archive.org doesn't list this as public domain or Creative Commons."
+                else if (url == null) error = "No streamable video for this title." else {
                     player.setMediaItem(MediaItem.fromUri(url))
                     if (!restart) ArchiveProgress.entries[id]?.let { player.seekTo(it.positionMs) }
                     player.prepare()

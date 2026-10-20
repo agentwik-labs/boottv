@@ -28,8 +28,10 @@ data class ArchiveDetails(
     val description: String?,
     val runtime: String?,
     val creator: String?,
-    /** "Public domain", "Creative Commons" or "Free to watch", from the item's license. */
+    /** "Public domain", "Creative Commons" or "Public domain (1930 or earlier)", from the item's license and year. */
     val license: String,
+    /** Passes the rights check ([isCleared]); otherwise BootTV won't play or save it. */
+    val cleared: Boolean,
     /** Best MP4 to stream (H.264 when available). */
     val videoUrl: String?,
     /** Smaller full-length MP4 (up to 480p) to save to the device. */
@@ -39,20 +41,54 @@ data class ArchiveDetails(
     val torrentUrl: String?,
 )
 
-/** A row on the Free Movies screen: one curated archive.org collection. */
-data class ArchiveShelf(val title: String, val collection: String)
+/**
+ * A row of archive.org titles: [query] is an advancedsearch filter; [rated] keeps only well-rated titles
+ * (popularity alone surfaces junk) and sorts by number of reviews, otherwise by downloads.
+ */
+data class ArchiveShelf(val title: String, val key: String, val query: String, val rated: Boolean = true)
+
+/** Free Movies: only the Archive's staff-curated public-domain film collections, never open user-upload ones. */
+val ArchiveShelves = listOf(
+    ArchiveShelf("Feature Films", "feature_films", "collection:feature_films"),
+    ArchiveShelf("Film Noir", "Film_Noir", "collection:Film_Noir"),
+    ArchiveShelf("Sci-Fi & Horror", "SciFi_Horror", "collection:SciFi_Horror"),
+    ArchiveShelf("Silent Films", "silent_films", "collection:silent_films"),
+)
 
 /**
- * Only the Archive's staff-curated public-domain collections, never open user-upload ones,
- * and only well-rated titles (popularity alone surfaces junk).
+ * Cartoons, by series. The Archive's animation collection takes uploads from anyone, so these are only series
+ * known to be in the public domain, with a release year no later than 1963 (later uploads there include
+ * mislabelled modern shows), and never compilations.
  */
-val ArchiveShelves = listOf(
-    ArchiveShelf("Classic Cartoons", "classic_cartoons"),
-    ArchiveShelf("Feature Films", "feature_films"),
-    ArchiveShelf("Film Noir", "Film_Noir"),
-    ArchiveShelf("Sci-Fi & Horror", "SciFi_Horror"),
-    ArchiveShelf("Silent Films", "silent_films"),
+private const val TOONS = "collection:animationandcartoons AND year:[1900 TO 1963] AND NOT title:(collection OR compilation OR festival OR upgrades OR copied)"
+val ToonShelves = listOf(
+    ArchiveShelf("Popeye", "toons_popeye", "$TOONS AND title:popeye", rated = false),
+    ArchiveShelf("Superman (1941–43)", "toons_superman", "$TOONS AND title:superman AND year:[1941 TO 1943]", rated = false),
+    ArchiveShelf("Betty Boop", "toons_betty", "$TOONS AND title:(\"betty boop\")", rated = false),
+    ArchiveShelf("Looney Tunes & Merrie Melodies", "toons_looney",
+        "$TOONS AND title:(bugs OR daffy OR porky OR \"merrie melodies\" OR \"looney tunes\")", rated = false),
+    ArchiveShelf("Casper, Baby Huey & friends", "toons_harvey",
+        "$TOONS AND title:(casper OR \"friendly ghost\" OR \"baby huey\" OR herman OR katnip OR \"little audrey\")", rated = false),
+    ArchiveShelf("Silent era: Felix, Gertie & early Mickey", "toons_silent",
+        "$TOONS AND year:[1900 TO 1930] AND title:(felix OR gertie OR inkwell OR koko OR \"krazy kat\" OR oswald OR " +
+            "\"steamboat willie\" OR \"plane crazy\" OR \"gallopin\" OR \"barn dance\" OR bosko)", rated = false),
+    ArchiveShelf("New animated shorts (Creative Commons)", "toons_open",
+        "collection:animationandcartoons AND title:(\"big buck bunny\" OR sintel OR \"elephants dream\")", rated = false),
 )
+
+/**
+ * The rights check: archive.org lists the item as public domain or Creative Commons, or it came out in 1930 or
+ * earlier (public domain in the US). Uploads without a license and from after 1930 aren't shown.
+ */
+internal fun isCleared(licenseUrl: String?, year: String?): Boolean {
+    val lic = licenseUrl.orEmpty().lowercase()
+    if ("creativecommons.org" in lic) return true
+    val y = year?.take(4)?.toIntOrNull() ?: return false
+    return y in 1800..1930
+}
+
+/** The same check as an advancedsearch filter, so rows fill up with titles that pass it. */
+private const val RIGHTS = "(licenseurl:*creativecommons.org* OR year:[1800 TO 1930])"
 
 object ArchiveClient {
     private val http = OkHttpClient.Builder()
@@ -60,11 +96,12 @@ object ArchiveClient {
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
     private val json = Json { ignoreUnknownKeys = true }
-    private val collections = ArchiveShelves.joinToString(" OR ") { it.collection }
+    private const val SEARCHED = "feature_films OR Film_Noir OR SciFi_Horror OR silent_films OR classic_cartoons"
     private const val QUALITY = "avg_rating:[4 TO 5] AND num_reviews:[3 TO 100000]"
 
     suspend fun shelf(shelf: ArchiveShelf, rows: Int = 40): List<ArchiveItem> =
-        query("collection:${shelf.collection} AND mediatype:movies AND $QUALITY", rows)
+        if (shelf.rated) query("(${shelf.query}) AND mediatype:movies AND $QUALITY", rows)
+        else query("(${shelf.query}) AND mediatype:movies", rows, sort = "downloads desc")
 
     /** Title search across the curated collections. */
     suspend fun search(text: String, rows: Int = 30): List<ArchiveItem> {
@@ -72,16 +109,17 @@ object ArchiveClient {
             .map { it.replace(Regex("[^\\p{L}\\p{N}]"), "") }.filter { it.isNotEmpty() }
         if (words.isEmpty()) return emptyList()
         val title = words.joinToString(" AND ") { "title:$it*" }
-        return query("($title) AND collection:($collections) AND mediatype:movies", rows)
+        return query("($title) AND collection:($SEARCHED) AND mediatype:movies", rows)
     }
 
-    private suspend fun query(q: String, rows: Int): List<ArchiveItem> {
+    private suspend fun query(q: String, rows: Int, sort: String = "num_reviews desc"): List<ArchiveItem> {
         val url = Uri.parse("https://archive.org/advancedsearch.php").buildUpon()
-            .appendQueryParameter("q", q)
+            .appendQueryParameter("q", "($q) AND $RIGHTS")
             .appendQueryParameter("fl[]", "identifier")
             .appendQueryParameter("fl[]", "title")
             .appendQueryParameter("fl[]", "year")
-            .appendQueryParameter("sort[]", "num_reviews desc")
+            .appendQueryParameter("fl[]", "licenseurl")
+            .appendQueryParameter("sort[]", sort)
             .appendQueryParameter("rows", rows.toString())
             .appendQueryParameter("output", "json")
             .build().toString()
@@ -90,6 +128,7 @@ object ArchiveClient {
         return docs.mapNotNull { d ->
             val o = d as? JsonObject ?: return@mapNotNull null
             val id = o.str("identifier") ?: return@mapNotNull null
+            if (!isCleared(o.str("licenseurl"), o.str("year"))) return@mapNotNull null
             ArchiveItem(id, o.str("title") ?: id, o.str("year"))
         }.distinctBy { it.title.lowercase() }
     }
@@ -117,18 +156,21 @@ object ArchiveClient {
         val description = meta.str("description")?.let {
             HtmlCompat.fromHtml(it, HtmlCompat.FROM_HTML_MODE_LEGACY).toString().replace(Regex("\\s+"), " ").trim()
         }?.takeIf { it.isNotEmpty() }
+        val year = meta.str("year") ?: meta.str("date")?.take(4)
+        val licenseUrl = meta.str("licenseurl")
         return ArchiveDetails(
-            item = ArchiveItem(id, meta.str("title") ?: id, meta.str("year") ?: meta.str("date")?.take(4)),
+            item = ArchiveItem(id, meta.str("title") ?: id, year),
             description = description,
             runtime = meta.str("runtime"),
             creator = meta.str("creator"),
-            license = meta.str("licenseurl").orEmpty().lowercase().let {
+            license = licenseUrl.orEmpty().lowercase().let {
                 when {
                     "publicdomain" in it -> "Public domain"
                     "creativecommons" in it -> "Creative Commons"
-                    else -> "Free to watch"
+                    else -> "Public domain (1930 or earlier)"
                 }
             },
+            cleared = isCleared(licenseUrl, year),
             videoUrl = download(mp4),
             downloadUrl = download(small),
             downloadMd5 = small?.str("md5"),

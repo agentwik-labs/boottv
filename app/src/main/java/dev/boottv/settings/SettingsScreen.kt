@@ -366,6 +366,9 @@ private fun HomeScreenSection(s: BootSettings) {
     SettingButton("Favorites row", trailing = if (s.showFavorites) "On" else "Off") {
         scope.launch { BootPrefs.setShowFavorites(context, !s.showFavorites) }
     }
+    SettingButton("Live preview on Home", trailing = if (s.livePreview) "On" else "Off") {
+        scope.launch { BootPrefs.setLivePreview(context, !s.livePreview) }
+    }
     SettingButton("Reset app order (alphabetical)") {
         scope.launch { BootPrefs.setOrder(context, emptyList()) }
         Toast.makeText(context, "App order reset", Toast.LENGTH_SHORT).show()

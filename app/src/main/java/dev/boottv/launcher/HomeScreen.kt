@@ -1,5 +1,6 @@
 package dev.boottv.launcher
 
+import androidx.activity.compose.ReportDrawnWhen
 import dev.boottv.core.ui.leftToMenu
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -263,6 +264,8 @@ fun HomeScreen(nav: NavController) {
         if (!stillThere) featured = feedFirst
     }
     val showFeed = movingPkg == null && !HomeFeed.isEmpty
+    // Startup counts as done once the rows are on screen (or the feed answered with nothing), for startup metrics.
+    ReportDrawnWhen { !HomeFeed.isEmpty || HomeFeed.loaded }
     val firstRowPrefix = when {
         HomeFeed.client != null && HomeFeed.continueWatching.isNotEmpty() -> "feed:media:"
         HomeFeed.onNow.isNotEmpty() -> "feed:live:"
@@ -291,12 +294,15 @@ fun HomeScreen(nav: NavController) {
     LaunchedEffect(firstKey, focusTick) {
         if (firstKey == null) return@LaunchedEffect
         if (didInitialFocus && focusTick == 0) return@LaunchedEffect
-        // Give the content rows a moment on cold start so focus lands on them rather than jumping later.
-        if (!HomeFeed.loaded) withTimeoutOrNull(2500) { snapshotFlow { HomeFeed.loaded }.first { it } }
+        // Give the content rows a moment on cold start so focus lands on them rather than jumping later. Not when
+        // coming back (rows already showing): focus starts out on the side menu then, and a wait here would pull it
+        // away from the menu if the viewer pressed Left meanwhile.
+        if (!HomeFeed.loaded && HomeFeed.isEmpty) withTimeoutOrNull(2500) { snapshotFlow { HomeFeed.loaded }.first { it } }
         // Rows are lazy and animate in after navigation, so retry until a card really holds focus.
         repeat(20) { attempt ->
             delay(if (attempt == 0) 60 else 100)
-            if (homeHasFocus) return@repeat
+            // Stop once it has landed, or a quick press of Left to the side menu gets pulled back here.
+            if (homeHasFocus) { didInitialFocus = true; return@LaunchedEffect }
             val restore = lastFocused?.takeIf { focusTick == 0 && requesters.containsKey(it) && attempt < 10 }
             val ok = runCatching { requester(restore ?: firstKey).requestFocus() }.isSuccess
             if (!ok) runCatching { requester(firstKey).requestFocus() }
@@ -322,7 +328,8 @@ fun HomeScreen(nav: NavController) {
 
     Box(Modifier.fillMaxSize().background(BootColors.Background).onFocusChanged { homeHasFocus = it.hasFocus }) {
     CompositionLocalProvider(LocalBringIntoViewSpec provides MinimalScrollSpec) {
-    if (showFeed) HomeBackdrop(featured, alpha = 1f - scroll.value / 500f)
+    // The preview stops (and frees the video decoder) once the page scrolls down to the apps.
+    if (showFeed) HomeBackdrop(featured, alpha = 1f - scroll.value / 500f, livePreview = settings?.livePreview == true && scroll.value < 300)
     Column(
         Modifier
             .fillMaxSize()

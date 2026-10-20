@@ -7,3 +7,5 @@ dependencyResolutionManagement {
 }
 rootProject.name = "BootTV"
 include(":app")
+// Baseline Profile generator and startup / scrolling benchmarks (run on a device or the emulator).
+include(":baselineprofile")

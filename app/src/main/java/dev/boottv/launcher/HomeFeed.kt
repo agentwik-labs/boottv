@@ -60,6 +60,18 @@ import dev.boottv.livetv.Channel
 import dev.boottv.livetv.LiveState
 import dev.boottv.livetv.LiveTvRepository
 import dev.boottv.livetv.Programme
+import dev.boottv.livetv.animationChannels
+import dev.boottv.livetv.LiveVideoSurface
+import dev.boottv.livetv.PlayerLifecycle
+import dev.boottv.livetv.createLivePlayer
+import dev.boottv.livetv.tune
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalContext
+import androidx.media3.common.Player
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import java.text.DateFormat
@@ -67,6 +79,10 @@ import java.util.Date
 
 /** One live channel with what's on right now. */
 internal data class OnNow(val channel: Channel, val now: Programme?, val next: Programme?)
+
+/** [channels] with what's on now and next. */
+internal fun LiveState.onNow(channels: List<Channel>, now: Long = System.currentTimeMillis()): List<OnNow> =
+    channels.map { ch -> nowAndNext(ch.id, now).let { (n, x) -> OnNow(ch, n, x) } }
 
 /** What the big banner at the top of Home shows: the focused (or first) item from the feed rows. */
 internal sealed interface Featured {
@@ -126,23 +142,8 @@ internal object HomeFeed {
         cartoons = pickCartoons(state)
     }
 
-    private val animationGroups = setOf("anime", "anime & gaming", "animated", "animation", "cartoons", "kids", "infantil")
-    private val animationName = Regex("""\b(anime|animation|animated|cartoons?|toons?)\b|toon""", RegexOption.IGNORE_CASE)
-
-    /** Anime and cartoon channels from the free live feeds (anime first), by channel group or name. */
-    private fun pickCartoons(state: LiveState): List<OnNow> {
-        val now = System.currentTimeMillis()
-        fun isAnime(ch: Channel) = ch.groups.any { it.lowercase().startsWith("anime") } || ch.name.contains("anime", ignoreCase = true)
-        val matches = state.channels.filter { ch ->
-            ch.groups.any { it.lowercase() in animationGroups } || animationName.containsMatchIn(ch.name)
-        }
-        fun isCartoon(ch: Channel) = animationName.containsMatchIn(ch.name) || ch.groups.any { it.lowercase().startsWith("anima") }
-        // Anime, then channels that are clearly animation, then the rest of the kids' channels.
-        return matches.sortedBy { if (isAnime(it)) 0 else if (isCartoon(it)) 1 else 2 }
-            .distinctBy { it.name.lowercase() }
-            .take(24)
-            .map { ch -> state.nowAndNext(ch.id, now).let { (n, x) -> OnNow(ch, n, x) } }
-    }
+    /** Anime and cartoon channels from the free live feeds (anime first). */
+    private fun pickCartoons(state: LiveState): List<OnNow> = state.onNow(state.animationChannels().take(24))
 
     /** Favorites and the last-watched channel first, then channels that have guide data. */
     private fun pickOnNow(state: LiveState): List<OnNow> {
@@ -162,8 +163,12 @@ private val CardShape = RoundedCornerShape(12.dp)
 
 /** Full-bleed artwork behind the top of Home; fades out as the page scrolls down. */
 @Composable
-internal fun BoxScope.HomeBackdrop(featured: Featured?, alpha: Float) {
-    if (featured is Featured.Live) return LiveBackdrop(featured.onNow.channel, alpha)
+internal fun BoxScope.HomeBackdrop(featured: Featured?, alpha: Float, livePreview: Boolean) {
+    if (featured is Featured.Live) {
+        LiveBackdrop(featured.onNow.channel, alpha)
+        if (livePreview) LivePreview(featured.onNow.channel, alpha)
+        return
+    }
     val url = (featured as? Featured.Media)?.let { it.client.backdropUrl(it.item) } ?: return
     Box(
         Modifier
@@ -205,6 +210,50 @@ private fun BoxScope.LiveBackdrop(channel: Channel, alpha: Float) {
                 plain = true,
             )
         }
+    }
+}
+
+/**
+ * The focused channel playing silently behind the banner, like Roku and Google TV. It starts once focus has rested
+ * on the card for a moment (scrolling past channels doesn't tune each one) and is covered until the first frame,
+ * so a channel that fails to load just keeps showing its logo.
+ */
+@Composable
+private fun BoxScope.LivePreview(channel: Channel, alpha: Float) {
+    val context = LocalContext.current
+    val player = remember { createLivePlayer(context, handleAudioFocus = false).apply { volume = 0f } }
+    var shown by remember { mutableStateOf(false) }
+    DisposableEffect(player) {
+        val listener = object : Player.Listener {
+            override fun onRenderedFirstFrame() { shown = true }
+        }
+        player.addListener(listener)
+        onDispose { player.removeListener(listener); player.release() }
+    }
+    LaunchedEffect(channel.id) {
+        shown = false
+        player.stop()
+        delay(1200)
+        player.tune(channel)
+        player.volume = 0f
+    }
+    PlayerLifecycle(player)
+    // A SurfaceView ignores Compose alpha, so it's faded with a cover in the page colour instead.
+    val reveal by animateFloatAsState(if (shown) 1f else 0f, tween(600), label = "preview")
+    Box(
+        Modifier
+            .align(Alignment.TopEnd)
+            .fillMaxWidth(0.6f)
+            .aspectRatio(16f / 9f),
+    ) {
+        LiveVideoSurface(player, Modifier.fillMaxSize())
+        Box(Modifier.fillMaxSize().background(BootColors.Background.copy(alpha = 1f - reveal * alpha.coerceIn(0f, 1f))))
+        Box(
+            Modifier.fillMaxSize().background(
+                Brush.horizontalGradient(0f to BootColors.Background, 0.35f to BootColors.Background.copy(alpha = 0.5f), 0.7f to Color.Transparent)
+            )
+        )
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.6f to Color.Transparent, 1f to BootColors.Background)))
     }
 }
 

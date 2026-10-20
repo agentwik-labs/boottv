@@ -76,6 +76,7 @@ private const val WINDOW_MS = 4 * SLOT_MS
 private const val NAV_RANGE_MS = 24 * 60 * 60_000L
 private const val FILTER_ALL = "\u0000all"
 private const val FILTER_FAV = "\u0000fav"
+private const val FILTER_TOONS = "\u0000toons"
 
 private val ChannelColWidth = 190.dp
 private val RowHeight = 50.dp
@@ -206,12 +207,13 @@ private fun Guide(state: LiveState, nav: NavController) {
     }
 
     var filter by remember {
-        mutableStateOf(GuideMemory.filter.takeIf { it == FILTER_ALL || it == FILTER_FAV || it in state.groups } ?: FILTER_ALL)
+        mutableStateOf(GuideMemory.filter.takeIf { it == FILTER_ALL || it == FILTER_FAV || it == FILTER_TOONS || it in state.groups } ?: FILTER_ALL)
     }
     val filtered = remember(state.channels, state.favorites, filter) {
         when (filter) {
             FILTER_ALL -> state.channels
             FILTER_FAV -> state.channels.filter { it.id in state.favorites }
+            FILTER_TOONS -> state.animationChannels().toSet().let { toons -> state.channels.filter { it in toons } }
             else -> state.channels.filter { filter in it.groups }
         }
     }
@@ -350,7 +352,8 @@ private fun Guide(state: LiveState, nav: NavController) {
     var okDown by remember { mutableStateOf(false) }
     var longFired by remember { mutableStateOf(false) }
 
-    val chipsRow = remember(state.groups) { listOf(FILTER_ALL, FILTER_FAV) + state.groups }
+    val hasToons = remember(state.channels) { state.animationChannels().isNotEmpty() }
+    val chipsRow = remember(state.groups, hasToons) { listOfNotNull(FILTER_ALL, FILTER_FAV, FILTER_TOONS.takeIf { hasToons }) + state.groups }
 
     Column(
         Modifier.fillMaxSize().padding(
@@ -439,7 +442,7 @@ private fun Guide(state: LiveState, nav: NavController) {
                     },
                 ) {
                     Text(
-                        when (f) { FILTER_ALL -> "All"; FILTER_FAV -> "Favorites"; else -> f },
+                        when (f) { FILTER_ALL -> "All"; FILTER_FAV -> "Favorites"; FILTER_TOONS -> "Cartoons & Anime"; else -> f },
                         maxLines = 1,
                     )
                 }

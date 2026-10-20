@@ -18,8 +18,9 @@ apps (Netflix, YouTube, Prime Video, Disney+, ...) keep working as normal apps.
 | Media library | Netflix-style **My Media** powered by Jellyfin on your Mac ([setup guide](docs/jellyfin.md)) |
 | Web browsing | Built-in TV browser with **ad and tracker blocking** |
 | — | **Web apps**: pin any website to Home as an app tile (Add website, or Add to Home in the browser) |
-| — | **Cartoons & Anime** row of free live channels on Home |
-| — | **Free Movies**: public-domain films and cartoons from the Internet Archive, with search, downloads for offline viewing that keep going in the background (Archive's own torrents only), and Resume / Continue watching |
+| — | **Live preview**: the focused channel plays silently behind the Home banner (can be turned off in Settings) |
+| — | **Cartoons**: anime and cartoon channels live now, free anime apps (RetroCrush, Tubi, Pluto TV), and public-domain cartoons sorted by series (Popeye, Fleischer Superman, Betty Boop, Looney Tunes, Casper, silent-era Felix and early Mickey, Creative Commons shorts); a **Cartoons & Anime** filter in the Live TV guide |
+| — | **Free Movies**: public-domain and Creative Commons films from the Internet Archive, with search, downloads for offline viewing that keep going in the background (Archive's own torrents only), and Resume / Continue watching. A **rights check** hides anything archive.org doesn't list as public domain or Creative Commons, unless it came out in 1930 or earlier |
 | Screensaver | Built-in screensaver (clock/photo), no ads |
 | Parental controls | **Parental PIN** for locked apps and settings |
 | Settings | Theme, rows, apps, live TV sources, My Media server, PIN |
@@ -36,7 +37,7 @@ Your TV isn't a smart TV, so you need a streaming box on HDMI. Pick one that run
 
 | Device | Approx. price | Verdict |
 |---|---|---|
-| **Xiaomi TV Stick 4K (2nd Gen)** (Google TV) | ~$50 | **Best HDMI stick on Amazon** ([B0FFN6NRTZ](https://www.amazon.com/dp/B0FFN6NRTZ)). Voice remote, Wi-Fi 6. |
+| **Xiaomi TV Stick 4K (2nd Gen)** (Google TV) | ~$70 | **Best HDMI stick on Amazon** ([B0FFN6NRTZ](https://www.amazon.com/dp/B0FFN6NRTZ)). Voice remote, Wi-Fi 6. |
 | **Walmart Onn 4K Pro** (Google TV) | ~$50 | Best box. Fast, 3 GB RAM, Ethernet port, voice remote with mic, Dolby Vision/Atmos. |
 | **Google TV Streamer** | ~$100 | Fastest, Ethernet, great remote. Pricier. |
 | Fire TV Stick 4K Max | ~$40–60 | Installs, but Amazon **blocks launcher replacement** (see limitations). |
@@ -46,6 +47,8 @@ Buying guide with screenshots: [docs/stick.html](docs/stick.html).
 
 Avoid cheap no-name Android boxes (no security updates, often preloaded malware) and
 the old Chromecast with Google TV HD (2 GB / slow storage).
+
+**Older TV without HDMI?** Add an HDMI-to-RCA (AV) converter with an NTSC/PAL switch (~$15–30); the picture is standard definition.
 
 **Remote:** your Roku voice remote only talks to Roku devices. Use the remote that comes
 with the new box — its mic button works with BootTV's voice search.
@@ -99,6 +102,18 @@ tools/emulator.sh             # boots the BootTV_API34 Android TV AVD, installs,
 tools/emulator.sh --headless  # same, without a window
 ```
 
+## Speed
+
+BootTV ships a **Baseline Profile** (`app/src/release/generated/baselineProfiles`): the code for
+startup, the Home rows, the side menu, the guide, Free Movies and Cartoons is compiled ahead of time,
+so a cheap stick doesn't stutter on first use. Regenerate it after big UI changes, and compare
+startup and scrolling with and without it, on the emulator or a connected stick:
+
+```bash
+tools/profile.sh              # regenerate the profile (drives the app with the remote)
+tools/profile.sh --benchmark  # startup time and frame timing, without vs. with the profile
+```
+
 ## Your own movies and shows
 
 See **[docs/jellyfin.md](docs/jellyfin.md)**: install Jellyfin on the Mac, point it at
@@ -108,7 +123,8 @@ your folders, then BootTV → Settings → My Media → Discover / Quick Connect
 
 ```
 app/src/main/java/dev/boottv/
-  launcher/     home screen, app grid (move / hide / lock)
+  launcher/     home screen, app grid (move / hide / lock), live preview
+  archive/      Free Movies and Cartoons (Internet Archive), downloads, resume
   settings/     settings screens, parental PIN
   search/       universal + voice search UI
   browser/      ad-blocking TV web browser
@@ -116,7 +132,8 @@ app/src/main/java/dev/boottv/
   jellyfin/     My Media (Jellyfin client)
   screensaver/  DreamService screensaver
   core/         shared UI, navigation, search registry, storage
-tools/          build / connect / install / debloat / emulator scripts
+baselineprofile/ Baseline Profile generator and startup / scrolling benchmarks
+tools/          build / connect / install / debloat / emulator / profile scripts
 docs/           guides (Jellyfin)
 dist/           built APK (BootTV.apk)
 ```

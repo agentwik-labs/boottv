@@ -54,6 +54,24 @@ internal val FreeApps = listOf(
     FreeApp("com.hoopladigital.android", "hoopla", "Free movies and TV with your library card.", Color(0xFF1C6B4A)),
 )
 
+/** Free, legal anime: suggested on the Cartoons screen. */
+internal val ToonApps = listOf(
+    FreeApp("com.dmr.retrocrush.tv", "RetroCrush", "Classic anime series and films, free with ads.", Color(0xFFB0246A)),
+    FreeApp("com.tubitv", "Tubi", "A large free anime and cartoon library, with ads.", Color(0xFFE8430A)),
+    FreeApp("tv.pluto.android", "Pluto TV", "Free 24/7 anime and cartoon channels, with ads.", Color(0xFF2B2B8C)),
+)
+
+internal fun isInstalled(context: Context, pkg: String) = launchIntent(context, pkg) != null
+
+private fun launchIntent(context: Context, pkg: String): Intent? =
+    context.packageManager.getLeanbackLaunchIntentForPackage(pkg) ?: context.packageManager.getLaunchIntentForPackage(pkg)
+
+/** Opens [app] if it's installed, otherwise its store listing. */
+internal fun openFreeApp(context: Context, app: FreeApp) {
+    val launch = launchIntent(context, app.pkg)
+    if (launch != null) context.startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) else openStoreListing(context, app)
+}
+
 /** Opens the Play Store page for [app] (falls back to the web listing). */
 internal fun openStoreListing(context: Context, app: FreeApp) {
     val intents = listOf(
@@ -79,9 +97,11 @@ internal fun FreeAppsRow(
     requester: (String) -> FocusRequester,
     onFocused: (key: String, Featured) -> Unit,
     onOpen: (FreeApp) -> Unit,
+    title: String = "Free to watch",
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     Column(Modifier.fillMaxWidth()) {
-        Text("Free to watch", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = BootColors.TextPrimary)
+        Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = BootColors.TextPrimary)
         LazyRow(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(BootDimens.CardSpacing),
@@ -115,7 +135,7 @@ internal fun FreeAppsRow(
                             modifier = Modifier.align(Alignment.Center).padding(horizontal = 10.dp),
                         )
                         Text(
-                            "FREE · GET",
+                            if (isInstalled(context, app.pkg)) "OPEN" else "FREE · GET",
                             color = Color.White,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,

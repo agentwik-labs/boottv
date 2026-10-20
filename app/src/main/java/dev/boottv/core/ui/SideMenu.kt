@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Animation
 import androidx.compose.material.icons.filled.Theaters
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.runtime.Composable
@@ -61,6 +62,7 @@ val BootMenuItems = listOf(
     MenuItem(Routes.LIVE, "Live TV", Icons.Filled.LiveTv),
     MenuItem(Routes.MEDIA, "My Media", Icons.Filled.VideoLibrary),
     MenuItem(Routes.FREE, "Free Movies", Icons.Filled.Theaters),
+    MenuItem(Routes.TOONS, "Cartoons", Icons.Filled.Animation),
     MenuItem(Routes.BROWSER, "Browser", Icons.Filled.Public),
     MenuItem(Routes.SETTINGS, "Settings", Icons.Filled.Settings),
 )
@@ -128,10 +130,11 @@ fun SideMenu(
         Column(
             Modifier
                 .fillMaxHeight()
-                .padding(horizontal = 12.dp, vertical = BootDimens.PagePaddingV),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+                .padding(horizontal = 12.dp, vertical = 20.dp),
+            // Eight entries have to fit a 540 dp tall TV screen.
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Box(Modifier.height(56.dp).padding(start = 8.dp), contentAlignment = Alignment.CenterStart) {
+            Box(Modifier.height(48.dp).padding(start = 8.dp), contentAlignment = Alignment.CenterStart) {
                 Text(
                     if (expanded) "BootTV" else "B",
                     fontSize = 26.sp,
@@ -140,7 +143,7 @@ fun SideMenu(
                     maxLines = 1,
                 )
             }
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(12.dp))
             BootMenuItems.forEach { item ->
                 SideMenuEntry(
                     item = item,
@@ -165,7 +168,7 @@ private fun SideMenuEntry(
     val shape = RoundedCornerShape(26.dp)
     Surface(
         onClick = onClick,
-        modifier = modifier.fillMaxWidth().height(52.dp),
+        modifier = modifier.fillMaxWidth().height(48.dp),
         shape = ClickableSurfaceDefaults.shape(shape),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.04f),
         colors = ClickableSurfaceDefaults.colors(

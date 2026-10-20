@@ -28,6 +28,8 @@ data class BootSettings(
     val favorites: List<String> = emptyList(),
     val gridColumns: Int = 5,
     val showFavorites: Boolean = true,
+    /** Home plays the focused live channel, muted, behind the banner. */
+    val livePreview: Boolean = true,
     val accentId: String = "purple",
     /** SHA-256 of the parental PIN, or null when no PIN is set. */
     val pinHash: String? = null,
@@ -43,6 +45,7 @@ object BootPrefs {
     private val FAVORITES = stringPreferencesKey("favorite_apps")
     private val COLUMNS = intPreferencesKey("grid_columns")
     private val SHOW_FAVORITES = booleanPreferencesKey("show_favorites")
+    private val LIVE_PREVIEW = booleanPreferencesKey("live_preview")
     private val ACCENT = stringPreferencesKey("accent")
     private val PIN = stringPreferencesKey("pin_hash")
     private val PIN_SETTINGS = booleanPreferencesKey("pin_for_settings")
@@ -56,6 +59,7 @@ object BootPrefs {
         favorites = this[FAVORITES].splitList(),
         gridColumns = (this[COLUMNS] ?: 5).coerceIn(4, 5),
         showFavorites = this[SHOW_FAVORITES] ?: true,
+        livePreview = this[LIVE_PREVIEW] ?: true,
         accentId = this[ACCENT] ?: "purple",
         pinHash = this[PIN],
         pinForSettings = this[PIN_SETTINGS] ?: false,
@@ -101,6 +105,9 @@ object BootPrefs {
 
     suspend fun setShowFavorites(context: Context, show: Boolean) =
         edit(context) { it[SHOW_FAVORITES] = show }
+
+    suspend fun setLivePreview(context: Context, on: Boolean) =
+        edit(context) { it[LIVE_PREVIEW] = on }
 
     suspend fun setAccent(context: Context, id: String) = edit(context) { it[ACCENT] = id }
 

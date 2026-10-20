@@ -10,6 +10,7 @@ object Routes {
     const val LIVE = "live"
     const val MEDIA = "media"
     const val FREE = "free"
+    const val TOONS = "toons"
     const val BROWSER = "browser"
     const val SETTINGS = "settings"
 }
