@@ -53,7 +53,15 @@ import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import dev.boottv.core.ui.BallEmblem
 import dev.boottv.core.ui.BootColors
+import dev.boottv.core.ui.Pixel
+import dev.boottv.core.ui.gameFrame
 import dev.boottv.core.ui.BootDimens
 import dev.boottv.core.ui.PokeSprite
 import dev.boottv.core.ui.PokeType
@@ -82,8 +90,6 @@ import java.util.Date
  * Nothing works differently from before: OK plays, folders become channels, Send to TV and the Mac library are entries.
  */
 
-private val DexRed = Color(0xFFDC0A2D)
-private val DexRedDark = Color(0xFF9E0520)
 private val DexScreenBg = Color(0xFF0E1024)
 private val DexBezel = Color(0xFF2B2D3F)
 
@@ -170,7 +176,7 @@ fun MyMediaScreen(nav: NavController) {
         Modifier.fillMaxSize().background(BootColors.Background)
             .padding(start = 24.dp, end = BootDimens.PagePaddingH, top = 18.dp, bottom = 18.dp)
             .clip(RoundedCornerShape(22.dp))
-            .background(Brush.verticalGradient(listOf(DexRed, DexRedDark)))
+            .background(Brush.verticalGradient(listOf(BootColors.theme.shell, BootColors.theme.shellDark)))
             .padding(14.dp),
     ) {
         DexTop(registered = videos.size)
@@ -216,15 +222,16 @@ private fun DexTop(registered: Int) {
         }
         Spacer(Modifier.width(14.dp))
         listOf(Color(0xFFFF4D4D), Color(0xFFFFD84D), Color(0xFF5CE65C)).forEach { c ->
-            Box(Modifier.size(14.dp).background(c, CircleShape).border(2.dp, DexRedDark, CircleShape))
+            Box(Modifier.size(14.dp).background(c, CircleShape).border(2.dp, BootColors.theme.shellDark, CircleShape))
             Spacer(Modifier.width(8.dp))
         }
         Spacer(Modifier.weight(1f))
         Column(horizontalAlignment = Alignment.End) {
-            Text("MY MEDIA", color = Color.White, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+            Text("MY MEDIA", color = Color.White, fontFamily = Pixel, fontSize = 20.sp)
+            Spacer(Modifier.height(6.dp))
             Text(
-                if (registered == 0) "NO ENTRIES YET" else "$registered ENTR${if (registered == 1) "Y" else "IES"} REGISTERED",
-                color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.5.sp,
+                if (registered == 0) "NO ENTRIES YET" else "SEEN $registered   OWN ${LocalProgress.entries.size}",
+                color = Color.White.copy(alpha = 0.85f), fontFamily = Pixel, fontSize = 9.sp,
             )
         }
     }
@@ -268,7 +275,7 @@ private fun DexDetail(entry: DexEntry?, registered: Int, status: String?) {
             is DexEntry.Video -> {
                 val v = entry.video
                 val seen = LocalProgress.entries[v.id]
-                Text("No.%03d".format(entry.number), color = BootColors.TextSecondary, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+                Text("No.%03d".format(entry.number), color = BootColors.TextSecondary, fontFamily = Pixel, fontSize = 11.sp)
                 Text(v.title, style = MaterialTheme.typography.titleLarge, color = BootColors.TextPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(4.dp))
                 TypeBadge(entry.type)
@@ -284,7 +291,7 @@ private fun DexDetail(entry: DexEntry?, registered: Int, status: String?) {
             }
             is DexEntry.Channel -> {
                 val (ch, now, next) = entry.onNow
-                Text("CHANNEL ${ch.number ?: ""}", color = BootColors.TextSecondary, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+                Text("CHANNEL ${ch.number ?: ""}", color = BootColors.TextSecondary, fontFamily = Pixel, fontSize = 11.sp)
                 Text(ch.name, style = MaterialTheme.typography.titleLarge, color = BootColors.TextPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(6.dp))
                 TypeBadge(entry.type)
@@ -305,7 +312,7 @@ private fun DexDetail(entry: DexEntry?, registered: Int, status: String?) {
             }
             is DexEntry.MakeChannel -> {
                 val ch = entry.channel
-                Text(if (ch != null) "CHANNEL ${ch.number}" else "NEW CHANNEL", color = BootColors.TextSecondary, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+                Text(if (ch != null) "CHANNEL ${ch.number}" else "NEW CHANNEL", color = BootColors.TextSecondary, fontFamily = Pixel, fontSize = 11.sp)
                 Text(entry.folder, style = MaterialTheme.typography.headlineSmall, color = BootColors.TextPrimary)
                 Spacer(Modifier.height(6.dp))
                 TypeBadge(entry.type)
@@ -327,8 +334,8 @@ private fun DexDetail(entry: DexEntry?, registered: Int, status: String?) {
 private fun TypeBadge(type: PokeType) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
-            type.label.uppercase(), color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp,
-            modifier = Modifier.background(type.color, RoundedCornerShape(50)).padding(horizontal = 10.dp, vertical = 3.dp),
+            type.label.uppercase(), color = Color.White, fontFamily = Pixel, fontSize = 9.sp,
+            modifier = Modifier.background(type.color, RoundedCornerShape(4.dp)).border(2.dp, Color.White.copy(alpha = 0.6f), RoundedCornerShape(4.dp)).padding(horizontal = 10.dp, vertical = 5.dp),
         )
         if (Sprites.on) PokeSprite(type.sprite, 40.dp, Modifier.padding(start = 2.dp))
     }
@@ -337,7 +344,7 @@ private fun TypeBadge(type: PokeType) {
 @Composable
 private fun Stat(label: String, value: String) {
     Row(Modifier.padding(vertical = 0.dp)) {
-        Text(label, color = BootColors.TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, modifier = Modifier.width(64.dp))
+        Text(label, color = BootColors.TextSecondary, fontFamily = Pixel, fontSize = 8.sp, modifier = Modifier.width(64.dp).padding(top = 3.dp))
         Text(value, color = BootColors.TextPrimary, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
@@ -345,8 +352,10 @@ private fun Stat(label: String, value: String) {
 /** The entry's flavour text, in a bordered box like the games' Dex pages. */
 @Composable
 private fun DexText(text: String) {
-    Box(Modifier.fillMaxWidth().border(2.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(6.dp)).padding(10.dp)) {
-        Text(text, color = BootColors.TextPrimary.copy(alpha = 0.85f), style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
+    val blink = rememberInfiniteTransition(label = "cursor").animateFloat(0f, 1f, infiniteRepeatable(tween(500), RepeatMode.Reverse), label = "blink")
+    Box(Modifier.fillMaxWidth().gameFrame().padding(10.dp)) {
+        Text(text, color = BootColors.TextPrimary.copy(alpha = 0.9f), style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(end = 14.dp))
+        Text("▼", color = BootColors.TextPrimary.copy(alpha = if (blink.value > 0.5f) 1f else 0f), fontSize = 10.sp, modifier = Modifier.align(Alignment.BottomEnd))
     }
 }
 
@@ -355,9 +364,9 @@ private fun SectionLine(s: DexEntry.Section) {
     Row(Modifier.fillMaxWidth().padding(start = 10.dp, top = 12.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(10.dp).background(s.type.color, CircleShape))
         Spacer(Modifier.width(8.dp))
-        Text(s.title.uppercase(), color = BootColors.TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
-        Spacer(Modifier.width(8.dp))
-        Text("${s.type.label} · ${s.count}", color = s.type.color, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+        Text(s.title.uppercase(), color = BootColors.TextSecondary, fontFamily = Pixel, fontSize = 9.sp)
+        Spacer(Modifier.width(10.dp))
+        Text("${s.type.label.uppercase()} ${s.count}", color = s.type.color, fontFamily = Pixel, fontSize = 9.sp)
     }
 }
 
@@ -380,14 +389,17 @@ private fun RegisterLine(e: DexEntry, modifier: Modifier, onClick: () -> Unit) {
             Text(if (focused) "▶" else " ", fontSize = 12.sp, modifier = Modifier.width(16.dp))
             when (e) {
                 is DexEntry.Video -> {
-                    Text("No.%03d".format(e.number), fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(54.dp))
+                    Column(Modifier.width(58.dp)) {
+                        Text("No.%03d".format(e.number), fontFamily = Pixel, fontSize = 8.sp)
+                        if (LocalProgress.entries.containsKey(e.video.id)) BallEmblem(12.dp, Modifier.padding(top = 3.dp))
+                    }
                     Box(Modifier.width(64.dp).height(36.dp).clip(RoundedCornerShape(4.dp))) { JfImage(e.video.image, Modifier.fillMaxSize()) }
                     Spacer(Modifier.width(12.dp))
                     Text(e.video.title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                    Text(formatClock(e.video.durationMs), fontSize = 12.sp, modifier = Modifier.padding(start = 8.dp))
+                    Text(formatClock(e.video.durationMs), fontFamily = Pixel, fontSize = 8.sp, modifier = Modifier.padding(start = 8.dp))
                 }
                 is DexEntry.Channel -> {
-                    Text("CH ${e.onNow.channel.number ?: ""}", fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(54.dp))
+                    Text("CH ${e.onNow.channel.number ?: ""}", fontFamily = Pixel, fontSize = 8.sp, modifier = Modifier.width(58.dp))
                     Box(Modifier.width(64.dp).height(36.dp).clip(RoundedCornerShape(4.dp))) {
                         val art = e.onNow.now?.image
                         if (art != null) JfImage(art, Modifier.fillMaxSize()) else SpriteArt(e.onNow.channel.name, Modifier.fillMaxSize())

@@ -496,7 +496,7 @@ private fun HomeScreenSection(s: BootSettings) {
         }
         Note(
             "Sprites are © Nintendo / Creatures / GAME FREAK. BootTV doesn't include them: the TV downloads them for your " +
-                "own use from the PokeAPI sprite collection. Pocket Monsters uses its own colours; accent colours apply to Minimal."
+                "own use from the PokeAPI sprite collection. Pocket Monsters and Gengar use their own colours; accent colours apply to Minimal."
         )
     } else {
     SubHeader("Accent color")

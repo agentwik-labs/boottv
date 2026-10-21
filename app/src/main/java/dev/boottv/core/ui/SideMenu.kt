@@ -196,7 +196,7 @@ private fun SideMenuEntry(
             if (Sprites.on) {
                 // The sprite's own canvas has a lot of empty space: draw it larger than its slot, centred.
                 Box(Modifier.size(22.dp), contentAlignment = Alignment.Center) {
-                    PokeSprite(item.sprite, if (focused) 72.dp else 64.dp, animated = focused)
+                    PokeSprite(if (item.route == Routes.HOME) Sprites.partner() else item.sprite, if (focused) 72.dp else 64.dp, animated = focused)
                 }
             } else {
                 Icon(item.icon, contentDescription = item.label, modifier = Modifier.size(22.dp))

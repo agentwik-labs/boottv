@@ -14,7 +14,9 @@ from scratch (night-battle indigo, capture-ball red, electric-yellow focus, roun
 Pocket Monsters adds Pokémon sprites: a partner by the clock, a Pokémon for each menu entry and row, and Pokémon
 cards for anything without a picture. The sprites are © Nintendo / Creatures / GAME FREAK and are not included in
 BootTV: the TV downloads them for personal use from the [PokeAPI sprite collection](https://github.com/PokeAPI/sprites),
-and they can be turned off (Settings › Home screen › Look).
+and they can be turned off (Settings › Home screen › Look). A third look, **Gengar**, is the Ghost-type take:
+purples, a lilac focus, Gengar as the partner and ghosts wherever sprites appear. Dex numbers, labels and type badges
+use the 8-bit Press Start 2P face, and dialogs and Dex text sit in the games' bordered message boxes.
 
 BootTV is a **launcher**: it replaces the device's home screen. Your streaming
 apps (Netflix, YouTube, Prime Video, Disney+, ...) keep working as normal apps.

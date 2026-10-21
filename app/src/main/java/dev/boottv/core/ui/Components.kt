@@ -28,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.composed
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
@@ -140,8 +141,9 @@ fun BootDialog(
             Modifier
                 .swallowOrphanKeyUp()
                 .width(width)
-                .background(BootColors.Surface, RoundedCornerShape(18.dp))
-                .border(1.dp, BootColors.SurfaceRaised, RoundedCornerShape(18.dp))
+                .then(if (BootColors.theme.playful) Modifier.gameFrame() else Modifier
+                    .background(BootColors.Surface, RoundedCornerShape(18.dp))
+                    .border(1.dp, BootColors.SurfaceRaised, RoundedCornerShape(18.dp)))
                 .padding(28.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
@@ -153,6 +155,21 @@ fun BootDialog(
             content()
         }
     }
+}
+
+/**
+ * The games' message window: a filled box with a thick outer border and a thin inner one. Colours come from the theme
+ * so it reads as part of the page (dialogs, Dex text).
+ */
+fun Modifier.gameFrame(fill: Color? = null): Modifier = composed {
+    val shape = RoundedCornerShape(6.dp)
+    val inner = RoundedCornerShape(3.dp)
+    this.background(BootColors.TextPrimary.copy(alpha = 0.9f), shape)
+        .padding(3.dp)
+        .background(fill ?: BootColors.Surface, inner)
+        .border(2.dp, BootColors.TextPrimary.copy(alpha = 0.9f), inner)
+        .padding(3.dp)
+        .border(1.dp, BootColors.TextPrimary.copy(alpha = 0.35f), inner)
 }
 
 /**

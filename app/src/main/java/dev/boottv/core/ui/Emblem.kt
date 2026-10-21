@@ -28,7 +28,7 @@ fun BallEmblem(size: Dp = 28.dp, modifier: Modifier = Modifier) {
         val r = this.size.minDimension / 2
         val c = center
         val line = r * 0.16f
-        drawArc(Color(0xFFEE1515), 180f, 180f, useCenter = true, topLeft = Offset(c.x - r, c.y - r), size = Size(r * 2, r * 2))
+        drawArc(BootColors.theme.accent ?: Color(0xFFEE1515), 180f, 180f, useCenter = true, topLeft = Offset(c.x - r, c.y - r), size = Size(r * 2, r * 2))
         drawArc(Color.White, 0f, 180f, useCenter = true, topLeft = Offset(c.x - r, c.y - r), size = Size(r * 2, r * 2))
         drawRect(Color(0xFF1B1B1F), topLeft = Offset(c.x - r, c.y - line / 2), size = Size(r * 2, line))
         drawCircle(Color(0xFF1B1B1F), radius = r, center = c, style = Stroke(width = line * 0.9f))
@@ -46,8 +46,8 @@ fun PocketWordmark(fontSize: TextUnit = 26.sp, ball: Dp = 28.dp, modifier: Modif
         Text(
             "BootTV",
             style = TextStyle(
-                fontFamily = Fredoka, fontWeight = FontWeight.Bold, fontSize = fontSize, color = Color(0xFFFFCB05),
-                shadow = Shadow(Color(0xFF2A75BB), offset = Offset(3f, 3f), blurRadius = 0f),
+                fontFamily = Fredoka, fontWeight = FontWeight.Bold, fontSize = fontSize, color = BootColors.theme.brand,
+                shadow = Shadow(BootColors.theme.brandShadow, offset = Offset(3f, 3f), blurRadius = 0f),
             ),
             maxLines = 1,
         )

@@ -34,8 +34,8 @@ data class BootSettings(
     val themeId: String = "pocket",
     /** Pokémon sprites in the Pocket Monsters theme (downloaded on the TV, never bundled). */
     val sprites: Boolean = true,
-    /** National Pokédex number of the partner shown in the top bar; 0 = a different one each day. */
-    val partner: Int = 25,
+    /** National Pokédex number of the partner shown in the top bar; 0 = a different one each day, -1 = the theme's. */
+    val partner: Int = -1,
     /** SHA-256 of the parental PIN, or null when no PIN is set. */
     val pinHash: String? = null,
     val pinForSettings: Boolean = false,
@@ -71,7 +71,7 @@ object BootPrefs {
         accentId = this[ACCENT] ?: "blue",
         themeId = this[THEME] ?: "pocket",
         sprites = this[SPRITES] ?: true,
-        partner = this[PARTNER] ?: 25,
+        partner = this[PARTNER] ?: -1,
         pinHash = this[PIN],
         pinForSettings = this[PIN_SETTINGS] ?: false,
     )

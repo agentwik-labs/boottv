@@ -44,7 +44,8 @@ object Sprites {
     private const val BASE = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon"
 
     internal var enabled by mutableStateOf(true)
-    internal var partnerChoice by mutableIntStateOf(25)
+    /** Pokédex number, 0 = a different one each day, -1 = whatever the theme suggests. */
+    internal var partnerChoice by mutableIntStateOf(-1)
 
     /** Sprites show in the Pocket Monsters theme when turned on. */
     val on: Boolean get() = enabled && BootColors.theme.playful
@@ -57,20 +58,26 @@ object Sprites {
 
     /** Partner choices for Settings; 0 picks a different one each day. */
     val partners = listOf(
-        25 to "Pikachu", 133 to "Eevee", 1 to "Bulbasaur", 4 to "Charmander", 7 to "Squirtle", 39 to "Jigglypuff",
+        -1 to "Theme's choice", 25 to "Pikachu", 94 to "Gengar", 133 to "Eevee", 1 to "Bulbasaur", 4 to "Charmander", 7 to "Squirtle", 39 to "Jigglypuff",
         52 to "Meowth", 54 to "Psyduck", 94 to "Gengar", 143 to "Snorlax", 151 to "Mew", 0 to "A different one each day",
     )
 
     fun partnerName(id: Int) = partners.firstOrNull { it.first == id }?.second ?: "#$id"
 
     /** Friendly, recognisable Pokémon for placeholders and the daily partner. */
-    private val pool = intArrayOf(
+    private val defaultPool = intArrayOf(
         1, 4, 7, 25, 35, 39, 52, 54, 58, 63, 77, 79, 92, 104, 113, 129, 131, 133, 137, 143, 147, 151, 152, 155, 158,
         172, 175, 183, 194, 196, 197, 216, 246, 252, 255, 258, 280, 300, 311, 328, 333, 349, 363, 387, 390, 393, 403,
         417, 427, 438, 446, 447, 470, 471, 479, 495, 498, 501, 509, 517, 532, 543, 546, 551, 570, 572, 587, 610,
     )
 
-    fun partner(): Int = if (partnerChoice == 0) pool[(LocalDate.now().toEpochDay() % pool.size).toInt()] else partnerChoice
+    private val pool: IntArray get() = BootColors.theme.pool ?: defaultPool
+
+    fun partner(): Int = when (partnerChoice) {
+        0 -> pool[(LocalDate.now().toEpochDay() % pool.size).toInt()]
+        -1 -> BootColors.theme.partner
+        else -> partnerChoice
+    }
 
     /** The same Pokémon every time for the same [key] (a title, a channel), so placeholders don't shuffle. */
     fun forKey(key: String): Int = pool[(key.hashCode() and 0x7fffffff) % pool.size]
@@ -79,6 +86,7 @@ object Sprites {
     fun forTitle(title: String): Int {
         val t = title.lowercase()
         return when {
+            BootColors.theme.pool != null -> forKey(title) // a ghost theme keeps to its ghosts
             "pokémon" in t || "pokemon" in t -> 25
             "continue" in t || "resume" in t -> 143 // Snorlax: picks up where you dozed off
             "on now" in t || "live" in t || "channel" in t -> 479 // Rotom lives in TVs

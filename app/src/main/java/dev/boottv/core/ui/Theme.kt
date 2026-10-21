@@ -54,6 +54,16 @@ data class ThemePreset(
     val accent: Color? = null,
     /** Rounded display face for titles (body text stays Inter). */
     val playful: Boolean = false,
+    /** The partner Pokémon when Settings leaves it to the theme. */
+    val partner: Int = 25,
+    /** Pokémon drawn for placeholders and the daily partner; null = the friendly default set. */
+    val pool: IntArray? = null,
+    /** Wordmark letters and their shadow. */
+    val brand: Color = Color(0xFFFFCB05),
+    val brandShadow: Color = Color(0xFF2A75BB),
+    /** The Pokédex hand-held's shell (My Media). */
+    val shell: Color = Color(0xFFDC0A2D),
+    val shellDark: Color = Color(0xFF9E0520),
 )
 
 object ThemePresets {
@@ -77,7 +87,23 @@ object ThemePresets {
         accent = Color(0xFFEE1515), playful = true,
     )
 
-    val all = listOf(Pocket, Minimal)
+    /**
+     * Gengar flavour: Ghost-type purples, a grin of lilac for focus, Gengar as the partner and ghosts everywhere
+     * sprites appear. Same layout and features as Pocket Monsters.
+     */
+    val Gengar = ThemePreset(
+        id = "gengar", name = "Gengar",
+        background = Color(0xFF140B24), surface = Color(0xFF2A1A45), surfaceRaised = Color(0xFF3C2866),
+        textPrimary = Color(0xFFF4ECFF), textSecondary = Color(0xFFC9B3F0), live = Color(0xFFFF3B5C),
+        focused = Color(0xFFE2C4FF), onFocused = Color(0xFF1B0F2E), glow = Color(0xFFA040A0).copy(alpha = 0.55f),
+        accent = Color(0xFFA040A0), playful = true,
+        partner = 94,
+        pool = intArrayOf(92, 93, 94, 200, 302, 353, 354, 355, 356, 425, 426, 429, 442, 477, 478, 479, 562, 563, 592, 593, 607, 608, 609, 622, 623),
+        brand = Color(0xFFE2C4FF), brandShadow = Color(0xFF6B2FA0),
+        shell = Color(0xFF5B2A86), shellDark = Color(0xFF3A1A5C),
+    )
+
+    val all = listOf(Pocket, Gengar, Minimal)
     val default = Pocket
     fun byId(id: String?): ThemePreset = all.firstOrNull { it.id == id } ?: default
 }
@@ -201,6 +227,9 @@ private val BootTypography = Typography().run {
         labelSmall = labelSmall.inter(FontWeight.Medium),
     )
 }
+
+/** Press Start 2P: the 8-bit face for Dex numbers, labels and badges (SIL Open Font License, see assets/licenses). */
+val Pixel = FontFamily(Font(R.font.press_start_2p, FontWeight.Normal))
 
 /** Fredoka: a round, friendly face for the Pocket Monsters theme (SIL Open Font License, see assets/licenses). */
 val Fredoka = FontFamily(
