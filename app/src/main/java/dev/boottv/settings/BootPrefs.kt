@@ -32,6 +32,10 @@ data class BootSettings(
     val livePreview: Boolean = true,
     val accentId: String = "blue",
     val themeId: String = "pocket",
+    /** Pokémon sprites in the Pocket Monsters theme (downloaded on the TV, never bundled). */
+    val sprites: Boolean = true,
+    /** National Pokédex number of the partner shown in the top bar; 0 = a different one each day. */
+    val partner: Int = 25,
     /** SHA-256 of the parental PIN, or null when no PIN is set. */
     val pinHash: String? = null,
     val pinForSettings: Boolean = false,
@@ -49,6 +53,8 @@ object BootPrefs {
     private val LIVE_PREVIEW = booleanPreferencesKey("live_preview")
     private val ACCENT = stringPreferencesKey("accent")
     private val THEME = stringPreferencesKey("theme")
+    private val SPRITES = booleanPreferencesKey("sprites")
+    private val PARTNER = intPreferencesKey("partner")
     private val PIN = stringPreferencesKey("pin_hash")
     private val PIN_SETTINGS = booleanPreferencesKey("pin_for_settings")
 
@@ -64,6 +70,8 @@ object BootPrefs {
         livePreview = this[LIVE_PREVIEW] ?: true,
         accentId = this[ACCENT] ?: "blue",
         themeId = this[THEME] ?: "pocket",
+        sprites = this[SPRITES] ?: true,
+        partner = this[PARTNER] ?: 25,
         pinHash = this[PIN],
         pinForSettings = this[PIN_SETTINGS] ?: false,
     )
@@ -117,6 +125,10 @@ object BootPrefs {
     suspend fun setAccent(context: Context, id: String) = edit(context) { it[ACCENT] = id }
 
     suspend fun setTheme(context: Context, id: String) = edit(context) { it[THEME] = id }
+
+    suspend fun setSprites(context: Context, on: Boolean) = edit(context) { it[SPRITES] = on }
+
+    suspend fun setPartner(context: Context, id: Int) = edit(context) { it[PARTNER] = id }
 
     /** Sets a new PIN, or clears it (and all locks that depend on it) when [pin] is null. */
     suspend fun setPin(context: Context, pin: String?) = edit(context) {

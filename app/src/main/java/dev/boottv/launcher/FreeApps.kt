@@ -1,5 +1,6 @@
 package dev.boottv.launcher
 
+import dev.boottv.core.ui.RowTitle
 import dev.boottv.core.ui.BootCard
 import dev.boottv.core.ui.leftToMenu
 import android.content.ActivityNotFoundException
@@ -102,7 +103,7 @@ internal fun FreeAppsRow(
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     Column(Modifier.fillMaxWidth()) {
-        Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = BootColors.TextPrimary)
+        RowTitle(title)
         LazyRow(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(BootDimens.CardSpacing),

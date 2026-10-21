@@ -1,6 +1,7 @@
 package dev.boottv.settings
 
 import dev.boottv.core.ui.ThemePresets
+import dev.boottv.core.ui.Sprites
 import dev.boottv.core.ui.BootDialog
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.material.icons.filled.AdminPanelSettings
@@ -484,7 +485,19 @@ private fun HomeScreenSection(s: BootSettings) {
         scope.launch { BootPrefs.setTheme(context, next.id) }
     }
     if (ThemePresets.byId(s.themeId).playful) {
-        Note("Pocket Monsters uses its own colours. Accent colours apply to the Minimal theme.")
+        SettingButton("Pokémon sprites", trailing = if (s.sprites) "On" else "Off") {
+            scope.launch { BootPrefs.setSprites(context, !s.sprites) }
+        }
+        if (s.sprites) {
+            SettingButton("Partner Pokémon", trailing = Sprites.partnerName(s.partner)) {
+                val ids = Sprites.partners.map { it.first }
+                scope.launch { BootPrefs.setPartner(context, ids[(ids.indexOf(s.partner) + 1).mod(ids.size)]) }
+            }
+        }
+        Note(
+            "Sprites are © Nintendo / Creatures / GAME FREAK. BootTV doesn't include them: the TV downloads them for your " +
+                "own use from the PokeAPI sprite collection. Pocket Monsters uses its own colours; accent colours apply to Minimal."
+        )
     } else {
     SubHeader("Accent color")
     Row(horizontalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.padding(vertical = 6.dp)) {

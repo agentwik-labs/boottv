@@ -56,17 +56,18 @@ import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import dev.boottv.core.Routes
 
-data class MenuItem(val route: String, val label: String, val icon: ImageVector)
+/** A side menu entry; [sprite] is the Pokémon (Pokédex number) that stands in for [icon] in the Pocket Monsters theme. */
+data class MenuItem(val route: String, val label: String, val icon: ImageVector, val sprite: Int)
 
 val BootMenuItems = listOf(
-    MenuItem(Routes.HOME, "Home", Icons.Filled.Home),
-    MenuItem(Routes.SEARCH, "Search", Icons.Filled.Search),
-    MenuItem(Routes.LIVE, "Live TV", Icons.Filled.LiveTv),
-    MenuItem(Routes.MEDIA, "My Media", Icons.Filled.VideoLibrary),
-    MenuItem(Routes.FREE, "Free Movies", Icons.Filled.Theaters),
-    MenuItem(Routes.TOONS, "Cartoons", Icons.Filled.Animation),
-    MenuItem(Routes.BROWSER, "Browser", Icons.Filled.Public),
-    MenuItem(Routes.SETTINGS, "Settings", Icons.Filled.Settings),
+    MenuItem(Routes.HOME, "Home", Icons.Filled.Home, sprite = 25),            // Pikachu, your partner
+    MenuItem(Routes.SEARCH, "Search", Icons.Filled.Search, sprite = 164),     // Noctowl, sharp-eyed
+    MenuItem(Routes.LIVE, "Live TV", Icons.Filled.LiveTv, sprite = 479),      // Rotom lives in TVs
+    MenuItem(Routes.MEDIA, "My Media", Icons.Filled.VideoLibrary, sprite = 235), // Smeargle, your own creations
+    MenuItem(Routes.FREE, "Free Movies", Icons.Filled.Theaters, sprite = 52), // Meowth, free stuff
+    MenuItem(Routes.TOONS, "Cartoons", Icons.Filled.Animation, sprite = 39),  // Jigglypuff
+    MenuItem(Routes.BROWSER, "Browser", Icons.Filled.Public, sprite = 137),   // Porygon, made of data
+    MenuItem(Routes.SETTINGS, "Settings", Icons.Filled.Settings, sprite = 81), // Magnemite, nuts and bolts
 )
 
 /** The side menu, so content rows can send Left there explicitly (null where there is no menu). */
@@ -175,9 +176,10 @@ private fun SideMenuEntry(
     onClick: () -> Unit,
 ) {
     val shape = RoundedCornerShape(26.dp)
+    var focused by remember { mutableStateOf(false) }
     Surface(
         onClick = onClick,
-        modifier = modifier.fillMaxWidth().height(48.dp),
+        modifier = modifier.fillMaxWidth().height(48.dp).onFocusChanged { focused = it.isFocused },
         shape = ClickableSurfaceDefaults.shape(shape),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.05f),
         colors = ClickableSurfaceDefaults.colors(
@@ -191,7 +193,14 @@ private fun SideMenuEntry(
             Modifier.fillMaxHeight().padding(horizontal = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(item.icon, contentDescription = item.label, modifier = Modifier.size(22.dp))
+            if (Sprites.on) {
+                // The sprite's own canvas has a lot of empty space: draw it larger than its slot, centred.
+                Box(Modifier.size(22.dp), contentAlignment = Alignment.Center) {
+                    PokeSprite(item.sprite, if (focused) 72.dp else 64.dp, animated = focused)
+                }
+            } else {
+                Icon(item.icon, contentDescription = item.label, modifier = Modifier.size(22.dp))
+            }
             if (expanded) {
                 Spacer(Modifier.width(16.dp))
                 Text(

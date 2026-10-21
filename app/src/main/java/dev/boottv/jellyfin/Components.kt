@@ -53,6 +53,11 @@ import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import coil.request.videoFramePercent
+import dev.boottv.core.ui.SpriteArt
+import dev.boottv.core.ui.LoadingIndicator
+import dev.boottv.core.ui.PokeSprite
+import dev.boottv.core.ui.Sprites
 import dev.boottv.core.ui.BootColors
 import dev.boottv.core.ui.BootDimens
 
@@ -68,11 +73,20 @@ internal fun JfImage(
     alignment: Alignment = Alignment.Center,
 ) {
     Box(if (plain) modifier else modifier.background(BootColors.SurfaceRaised), contentAlignment = Alignment.Center) {
-        if (!plain) Icon(fallback, contentDescription = null, tint = BootColors.TextSecondary, modifier = Modifier.size(36.dp))
+        if (!plain) {
+            // Pocket Monsters theme: a Pokémon on a coloured card until (or instead of) the picture.
+            if (Sprites.on) SpriteArt(url ?: fallback.name, Modifier.fillMaxSize())
+            else Icon(fallback, contentDescription = null, tint = BootColors.TextSecondary, modifier = Modifier.size(36.dp))
+        }
         if (url != null) {
             val ctx = LocalContext.current
             AsyncImage(
-                model = remember(url) { ImageRequest.Builder(ctx).data(url).crossfade(true).build() },
+                model = remember(url) {
+                    ImageRequest.Builder(ctx).data(url).crossfade(true)
+                        // Your own videos: a frame from a little way in, not the black first frame.
+                        .apply { if (url.startsWith("content://") && "/video/" in url) videoFramePercent(0.2) }
+                        .build()
+                },
                 contentDescription = null,
                 contentScale = contentScale,
                 alignment = alignment,
@@ -253,11 +267,14 @@ internal fun CenteredMessage(
     title: String,
     message: String? = null,
     modifier: Modifier = Modifier,
+    /** The Pokémon shown above the title in the Pocket Monsters theme (Psyduck, puzzled, by default). */
+    sprite: Int = 54,
     actions: @Composable (FocusRequester) -> Unit = {},
 ) {
     val fr = remember { FocusRequester() }
     Box(modifier.fillMaxSize().padding(horizontal = BootDimens.PagePaddingH, vertical = BootDimens.PagePaddingV), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.widthIn(max = 640.dp)) {
+            if (Sprites.on) PokeSprite(sprite, 128.dp, animated = true)
             Text(title, style = MaterialTheme.typography.headlineSmall, color = BootColors.TextPrimary)
             if (message != null) {
                 Spacer(Modifier.height(12.dp))
@@ -272,9 +289,7 @@ internal fun CenteredMessage(
 
 @Composable
 internal fun LoadingMessage(text: String = "Loading…") {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(text, style = MaterialTheme.typography.titleMedium, color = BootColors.TextSecondary)
-    }
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { LoadingIndicator(text) }
 }
 
 /** Human readable error for exceptions from the API. */

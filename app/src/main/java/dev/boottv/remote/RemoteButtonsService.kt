@@ -16,7 +16,6 @@ import dev.boottv.core.ui.ThemePresets
 import dev.boottv.settings.BootPrefs
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import dev.boottv.livetv.TvProvider
 
 /**
  * Watches only for the remote buttons assigned in Settings › Remote buttons and opens BootTV there; holding Back in
@@ -43,6 +42,9 @@ class RemoteButtonsService : AccessibilityService() {
         RemoteButtons.load(this)
         // The menu follows the chosen theme even if BootTV's screen hasn't been opened since the TV started.
         scope.launch { BootPrefs.themeIdFlow(this@RemoteButtonsService).collect { BootColors.setTheme(ThemePresets.byId(it)) } }
+        scope.launch {
+            BootPrefs.flow(this@RemoteButtonsService).collect { dev.boottv.core.ui.Sprites.enabled = it.sprites; dev.boottv.core.ui.Sprites.partnerChoice = it.partner }
+        }
         menu = QuickMenu(this)
         ContextCompat.registerReceiver(this, showReceiver, IntentFilter(ACTION_SHOW_MENU), "android.permission.DUMP", null, ContextCompat.RECEIVER_EXPORTED)
     }
@@ -70,7 +72,7 @@ class RemoteButtonsService : AccessibilityService() {
         if (backLike && foreground != packageName) return holdBack(event)
         // Android TV keeps the Guide and TV buttons for the system before apps see them; here they still arrive.
         val route = RemoteButtons.mappings.value[code]?.route ?: when (code) {
-            KeyEvent.KEYCODE_GUIDE, KeyEvent.KEYCODE_TV -> if (TvProvider.liveOpensProvider(this)) TvProvider.ROUTE else Routes.LIVE
+            KeyEvent.KEYCODE_GUIDE, KeyEvent.KEYCODE_TV -> Routes.LIVE
             else -> return false
         }
         // Act on release, and swallow the press too so the button's own app doesn't also open.

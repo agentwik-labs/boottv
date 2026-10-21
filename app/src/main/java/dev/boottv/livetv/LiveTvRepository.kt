@@ -253,7 +253,8 @@ object LiveTvRepository {
     private suspend fun refreshStale() {
         val now = System.currentTimeMillis()
         config.sources.filter { s ->
-            s.enabled && (caches[s.id] == null || now - s.lastRefresh > STALE_MS) && now - s.lastAttempt > RETRY_MS
+            s.enabled && (caches[s.id].let { it == null || it.format < SourceCache.FORMAT } || now - s.lastRefresh > STALE_MS) &&
+                now - s.lastAttempt > RETRY_MS
         }.forEach { refreshSource(it.id) }
     }
 
@@ -299,7 +300,7 @@ object LiveTvRepository {
                 } else {
                     resolved = channels.map { it.copy(epgId = it.tvgId?.lowercase()) }
                 }
-                val cache = SourceCache(resolved, programmes, System.currentTimeMillis())
+                val cache = SourceCache(resolved, programmes, System.currentTimeMillis(), format = SourceCache.FORMAT)
                 withContext(Dispatchers.IO) { writeAtomic(cacheFile(id)) { json.encodeToStream(cache, it) } }
                 caches[id] = cache
                 val now = System.currentTimeMillis()

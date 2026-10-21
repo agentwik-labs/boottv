@@ -139,6 +139,9 @@ fun BootTheme(content: @Composable () -> Unit) {
     LaunchedEffect(Unit) {
         BootPrefs.themeIdFlow(context).collect { BootColors.setTheme(ThemePresets.byId(it)) }
     }
+    LaunchedEffect(Unit) {
+        BootPrefs.flow(context).collect { Sprites.enabled = it.sprites; Sprites.partnerChoice = it.partner }
+    }
     val accent = BootColors.Accent
     val typography = if (BootColors.theme.playful) PlayfulTypography else BootTypography
     MaterialTheme(

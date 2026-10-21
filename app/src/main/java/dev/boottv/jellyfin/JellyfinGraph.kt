@@ -8,9 +8,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import dev.boottv.core.Routes
 
-/** Registers Routes.MEDIA and every "media/..." route. */
+/** Registers the Jellyfin screens (media/server, media/library, media/detail, media/play) under My Media. */
 fun NavGraphBuilder.jellyfinGraph(nav: NavController) {
-    composable(Routes.MEDIA) { BrowseScreen(nav) }
+    composable(dev.boottv.localmedia.MEDIA_SERVER_ROUTE) { BrowseScreen(nav) }
     composable(
         "media/library/{id}",
         arguments = listOf(navArgument("id") { type = NavType.StringType }),

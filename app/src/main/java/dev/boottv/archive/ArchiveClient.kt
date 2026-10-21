@@ -94,6 +94,8 @@ object ArchiveClient {
     private val http = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
+        // Give up as a whole after a while, so a slow or down archive.org shows "Try again" instead of loading forever.
+        .callTimeout(25, TimeUnit.SECONDS)
         .build()
     private val json = Json { ignoreUnknownKeys = true }
     private const val SEARCHED = "feature_films OR Film_Noir OR SciFi_Horror OR silent_films OR classic_cartoons"

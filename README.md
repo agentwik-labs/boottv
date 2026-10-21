@@ -11,6 +11,10 @@ icon-only side rail that opens when you press Left.
 Two looks (Settings › Home screen › Theme): **Pocket Monsters**, a playful Pokémon-inspired theme drawn
 from scratch (night-battle indigo, capture-ball red, electric-yellow focus, rounded Fredoka titles, and a
 "Pokémon on now" row of the official free Pokémon channels), and **Minimal**, the quiet Apple TV-style one.
+Pocket Monsters adds Pokémon sprites: a partner by the clock, a Pokémon for each menu entry and row, and Pokémon
+cards for anything without a picture. The sprites are © Nintendo / Creatures / GAME FREAK and are not included in
+BootTV: the TV downloads them for personal use from the [PokeAPI sprite collection](https://github.com/PokeAPI/sprites),
+and they can be turned off (Settings › Home screen › Look).
 
 BootTV is a **launcher**: it replaces the device's home screen. Your streaming
 apps (Netflix, YouTube, Prime Video, Disney+, ...) keep working as normal apps.
@@ -23,7 +27,7 @@ apps (Netflix, YouTube, Prime Video, Disney+, ...) keep working as normal apps.
 | Search | **Universal search** across installed apps, live channels and your own media; **voice search** with the device remote's mic |
 | The Roku Channel / Live TV | **Live TV guide** with free, legal channels (Pluto TV, Samsung TV Plus, Plex, Roku Channel feeds) plus **HDHomeRun** antenna tuners on your network |
 | Streaming store | Google Play / your device's store, untouched |
-| Media library | Netflix-style **My Media** powered by Jellyfin on your Mac ([setup guide](docs/jellyfin.md)) |
+| Media library | **My Media**: your own videos on the TV, in folders with pictures (a poster you send, or a frame from the video), Continue watching, and a "Make it a channel" card per folder. **Send from your phone**: the TV shows an address, QR code and 4-digit code; any phone or computer on the Wi-Fi uploads videos (and posters) from its browser. Videos from LocalSend or a USB drive show up too. Your Mac's Jellyfin library is one press away ([setup guide](docs/jellyfin.md)) |
 | Web browsing | Built-in TV browser with **ad and tracker blocking** |
 | — | **Web apps**: pin any website to Home as an app tile (Add website, or Add to Home in the browser) |
 | — | **Works out of the box**: a fresh install adds the free Pluto TV, Samsung TV Plus, Plex and Roku Channel line-ups |
@@ -33,7 +37,7 @@ apps (Netflix, YouTube, Prime Video, Disney+, ...) keep working as normal apps.
 | — | **My channels**: turn your own movies and shows (My Media library, or videos copied to the TV / a USB drive) into channels that play around the clock, in the guide and on Home (Settings › Live TV) |
 | — | **Remote hot buttons**: Guide/TV opens the guide, Channel ▲▼ jumps to the last channel, and any spare remote button can open a section or one of your channels, inside BootTV or (with the optional accessibility setting) from any app (Settings › Remote buttons) |
 | — | **Device control** (optional): BootTV becomes the stick's device owner (`tools/owner.sh` on a freshly reset stick), so Home always opens it, Google's home screen and ad services stay hidden even after updates, an optional lockdown blocks factory reset / safe mode / new users, and you choose when system updates install. Fully reversible in Settings › Device control |
-| — | **Your TV provider (Spectrum)**: get or open the Spectrum TV app from Settings › Live TV; optionally the Live TV menu and the remote's Guide button open Spectrum; pin it to Home or a remote button |
+| — | **Your TV provider (Spectrum)**: get or open the Spectrum TV app from Settings › Live TV, pin it to Home or a remote button, or open it from the menu over any app. Live TV and the Guide button stay BootTV's own guide |
 | Screensaver | Built-in screensaver (clock/photo), no ads |
 | Parental controls | **Parental PIN** for locked apps and settings |
 | Settings | Theme, rows, apps, live TV sources, My Media server, PIN |

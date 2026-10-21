@@ -129,6 +129,7 @@ object XmltvParser {
         var sub: String? = null
         var desc: String? = null
         var cat: String? = null
+        var icon: String? = null
         val depth = parser.depth
         while (true) {
             val ev = parser.next()
@@ -146,12 +147,17 @@ object XmltvParser {
                         }
                     }
                     "category" -> { val t = readText(parser); if (cat == null && t.isNotBlank()) cat = t.trim() }
+                    "icon" -> {
+                        val src = parser.getAttributeValue(null, "src")
+                        if (icon == null && src != null && src.startsWith("http")) icon = src
+                        skip(parser)
+                    }
                     else -> skip(parser)
                 }
             }
         }
         val t = title ?: return null
-        return Programme(start, stop, t, sub, desc, cat)
+        return Programme(start, stop, t, sub, desc, cat, icon)
     }
 
     /** Reads text content of the current element and leaves the parser on its END_TAG. */

@@ -50,6 +50,9 @@ import androidx.tv.material3.CardDefaults
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import dev.boottv.core.ui.BootColors
+import dev.boottv.core.ui.RowTitle
+import dev.boottv.core.ui.SpriteArt
+import dev.boottv.core.ui.Sprites
 import dev.boottv.core.ui.BootDimens
 import dev.boottv.browser.WebApp
 import dev.boottv.jellyfin.BaseItem
@@ -173,7 +176,7 @@ private val CardShape = RoundedCornerShape(12.dp)
 @Composable
 internal fun BoxScope.HomeBackdrop(featured: Featured?, alpha: Float, livePreview: Boolean) {
     if (featured is Featured.Live) {
-        LiveBackdrop(featured.onNow.channel, alpha)
+        LiveBackdrop(featured.onNow, alpha)
         if (livePreview) LivePreview(featured.onNow.channel, alpha)
         return
     }
@@ -199,9 +202,19 @@ internal fun BoxScope.HomeBackdrop(featured: Featured?, alpha: Float, livePrevie
     }
 }
 
-/** No artwork for live channels: the channel's logo, until the live preview (if on) fades in over it. */
+/** The programme's picture (or the channel's logo when the guide has none), until the live preview fades in over it. */
 @Composable
-private fun BoxScope.LiveBackdrop(channel: Channel, alpha: Float) {
+private fun BoxScope.LiveBackdrop(onNow: OnNow, alpha: Float) {
+    val channel = onNow.channel
+    onNow.now?.image?.let { art ->
+        Box(Modifier.align(Alignment.TopEnd).fillMaxWidth(0.66f).aspectRatio(16f / 9f).graphicsAlpha(alpha)) {
+            JfImage(art, Modifier.fillMaxSize(), plain = true)
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.2f)))
+            Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to BootColors.Background, 0.45f to BootColors.Background.copy(alpha = 0.7f), 0.85f to Color.Transparent)))
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.55f to Color.Transparent, 1f to BootColors.Background)))
+        }
+        return
+    }
     Box(
         Modifier
             .align(Alignment.TopEnd)
@@ -395,12 +408,24 @@ internal fun OnNowRow(
                     glow = BootCard.glow,
                     colors = BootCard.colors(BootColors.SurfaceRaised),
                 ) {
+                    val art = entry.now?.image
                     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.25f))))) {
-                        ChannelLogo(entry.channel, Modifier.align(Alignment.Center).fillMaxWidth(0.62f).fillMaxHeight(0.52f))
+                        if (art != null) {
+                            // The programme's picture, with the channel's logo small in the corner.
+                            JfImage(art, Modifier.fillMaxSize())
+                            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.45f), 0.3f to Color.Transparent, 0.65f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.6f))))
+                            if (entry.channel.logo != null) {
+                                ChannelLogo(entry.channel, Modifier.align(Alignment.BottomStart).padding(start = 10.dp, bottom = 18.dp).width(64.dp).height(28.dp), quiet = true)
+                            }
+                        } else if (entry.channel.logo == null && Sprites.on) {
+                            SpriteArt(entry.channel.name, Modifier.fillMaxSize())
+                        } else {
+                            ChannelLogo(entry.channel, Modifier.align(Alignment.Center).fillMaxWidth(0.62f).fillMaxHeight(0.52f))
+                        }
                         Text(
                             entry.channel.number ?: "",
                             style = MaterialTheme.typography.labelSmall,
-                            color = BootColors.TextSecondary,
+                            color = if (art != null) Color.White else BootColors.TextSecondary,
                             modifier = Modifier.align(Alignment.TopStart).padding(8.dp),
                         )
                         Text(
@@ -433,9 +458,10 @@ internal fun OnNowRow(
 
 /** Channel logo, or the channel's name when it has none or it fails to load. */
 @Composable
-private fun ChannelLogo(channel: Channel, modifier: Modifier) {
+private fun ChannelLogo(channel: Channel, modifier: Modifier, quiet: Boolean = false) {
     var failed by remember(channel.logo) { mutableStateOf(channel.logo == null) }
-    Box(modifier, contentAlignment = Alignment.Center) {
+    Box(modifier, contentAlignment = if (quiet) Alignment.CenterStart else Alignment.Center) {
+        if (failed && quiet) return@Box
         if (failed) {
             Text(
                 channel.name,
@@ -451,6 +477,7 @@ private fun ChannelLogo(channel: Channel, modifier: Modifier) {
                 model = channel.logo,
                 contentDescription = channel.name,
                 contentScale = ContentScale.Fit,
+                alignment = if (quiet) Alignment.CenterStart else Alignment.Center,
                 onError = { failed = true },
                 modifier = Modifier.fillMaxSize(),
             )
@@ -461,7 +488,7 @@ private fun ChannelLogo(channel: Channel, modifier: Modifier) {
 @Composable
 private fun FeedRow(title: String, content: androidx.compose.foundation.lazy.LazyListScope.() -> Unit) {
     Column(Modifier.fillMaxWidth()) {
-        Text(title, style = MaterialTheme.typography.titleMedium, color = BootColors.TextPrimary.copy(alpha = 0.9f))
+        RowTitle(title)
         // Bleed the row to the right screen edge so it reads as scrollable; keep cards' focus scale unclipped.
         LazyRow(
             modifier = Modifier.fillMaxWidth(),

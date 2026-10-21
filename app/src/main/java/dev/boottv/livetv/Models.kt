@@ -47,6 +47,8 @@ data class Programme(
     @SerialName("u") val subtitle: String? = null,
     @SerialName("d") val desc: String? = null,
     @SerialName("c") val category: String? = null,
+    /** Artwork for the programme (XMLTV <icon>), or a personal channel's title. */
+    @SerialName("i") val image: String? = null,
 )
 
 /** On-disk cache of one source's parsed data. Programmes keyed by lower-cased XMLTV channel id. */
@@ -55,7 +57,13 @@ data class SourceCache(
     val channels: List<Channel> = emptyList(),
     val programmes: Map<String, List<Programme>> = emptyMap(),
     val refreshedAt: Long = 0L,
-)
+    /** Bumped when the parser learns something new (2: programme pictures), so older caches refresh once. */
+    val format: Int = 1,
+) {
+    companion object {
+        const val FORMAT = 2
+    }
+}
 
 @Serializable
 data class LiveConfig(

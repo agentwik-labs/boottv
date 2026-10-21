@@ -157,7 +157,6 @@ private fun ProviderSettings() {
     val scope = rememberCoroutineScope()
     var tick by remember { mutableStateOf(0) }
     val pkg = remember(tick) { TvProvider.installedPackage(context) }
-    val liveOpens = remember(tick) { TvProvider.liveOpensProviderSetting(context) }
     val settings by remember { BootPrefs.flow(context) }.collectAsState(initial = null)
     val pinned = pkg != null && settings?.favorites?.contains(pkg) == true
     LifecycleResumeEffect(Unit) { tick++; onPauseOrDispose { } } // picks up an install from Google Play
@@ -165,7 +164,7 @@ private fun ProviderSettings() {
     SectionTitle("Your TV provider: ${TvProvider.NAME}")
     Text(
         if (pkg == null) "Get the free Spectrum TV app to watch your Spectrum channels here, then sign in with your Spectrum username."
-        else "Your Spectrum channels play in the Spectrum TV app. BootTV can open it from the Live TV menu, the remote's Guide button and Home.",
+        else "Your Spectrum channels play in the Spectrum TV app. Open it from here, from Home, or give it a remote button (Settings › Remote buttons). BootTV's Live TV guide stays BootTV's own free channels.",
         style = MaterialTheme.typography.bodySmall, color = BootColors.TextSecondary,
     )
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -175,14 +174,6 @@ private fun ProviderSettings() {
                 Text(if (pinned) "On Home ✓" else "Put on Home")
             }
         }
-    }
-    if (pkg != null) {
-        Button(onClick = { TvProvider.setLiveOpensProvider(context, !liveOpens); tick++ }) {
-            Text("Live TV menu and Guide button open Spectrum: " + if (liveOpens) "On" else "Off")
-        }
-    }
-    if (liveOpens && pkg != null) {
-        Text("BootTV's free channels are still on Home (On Now) and in Search.", style = MaterialTheme.typography.bodySmall, color = BootColors.TextSecondary)
     }
 }
 

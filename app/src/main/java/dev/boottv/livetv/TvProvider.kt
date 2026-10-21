@@ -14,8 +14,6 @@ object TvProvider {
     const val NAME = "Spectrum TV"
     /** The Google TV edition first, then the older phone/tablet app. */
     private val packages = listOf("com.spectrum.stva.androidtv", "com.TWCableTV")
-    private const val PREFS = "tv_provider"
-    private const val KEY_LIVE = "live_opens_provider"
 
     fun installedPackage(context: Context): String? = packages.firstOrNull { launchIntent(context, it) != null }
 
@@ -37,14 +35,4 @@ object TvProvider {
             )
         }
     }
-
-    /** Live TV (side menu) and the remote's Guide / TV buttons open the provider's app instead of BootTV's guide. */
-    fun liveOpensProvider(context: Context): Boolean =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_LIVE, false) && installedPackage(context) != null
-
-    fun setLiveOpensProvider(context: Context, on: Boolean) =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_LIVE, on).apply()
-
-    fun liveOpensProviderSetting(context: Context): Boolean =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_LIVE, false)
 }

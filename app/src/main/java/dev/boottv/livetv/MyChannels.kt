@@ -11,6 +11,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import dev.boottv.BootApp
 import dev.boottv.jellyfin.JellyfinClient
 import dev.boottv.jellyfin.JfHttp
+import dev.boottv.localmedia.LocalLibrary
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -27,10 +28,15 @@ import kotlin.random.Random
 
 /** What a personal channel plays. */
 @Serializable
-enum class MyContentKind { JELLYFIN_MOVIES, JELLYFIN_EPISODES, JELLYFIN_LIBRARY, DEVICE_VIDEOS }
+enum class MyContentKind { JELLYFIN_MOVIES, JELLYFIN_EPISODES, JELLYFIN_LIBRARY, DEVICE_VIDEOS, DEVICE_FOLDER }
 
 @Serializable
-data class MyContent(val kind: MyContentKind, val label: String, val libraryId: String? = null)
+data class MyContent(
+    val kind: MyContentKind,
+    val label: String,
+    /** The Jellyfin library, or for [MyContentKind.DEVICE_FOLDER] the folder's name. */
+    val libraryId: String? = null,
+)
 
 /** One title in a personal channel's line-up. [ref] is "jf:<item id>" or "local:<MediaStore id>". */
 @Serializable
@@ -40,6 +46,8 @@ data class MyItem(
     val subtitle: String? = null,
     val desc: String? = null,
     val durationMs: Long,
+    /** Its picture: a poster or Jellyfin artwork, or the video itself (a frame is shown). */
+    val image: String? = null,
 )
 
 /**
@@ -165,7 +173,7 @@ object MyChannels {
         }
         val programmes = chans.associate { ch ->
             "$ID_PREFIX${ch.id}" to schedule(ch, now - PAST_MS, now + AHEAD_MS).map { s ->
-                Programme(start = s.start, stop = s.end, title = s.item.title, subtitle = s.item.subtitle, desc = s.item.desc)
+                Programme(start = s.start, stop = s.end, title = s.item.title, subtitle = s.item.subtitle, desc = s.item.desc, image = s.item.image)
             }
         }
         return live to programmes
@@ -229,7 +237,8 @@ object MyChannels {
     // ---- Line-ups -----------------------------------------------------------------------------
 
     private suspend fun fetch(context: Context, content: MyContent): List<MyItem> = when (content.kind) {
-        MyContentKind.DEVICE_VIDEOS -> deviceVideos(context)
+        MyContentKind.DEVICE_VIDEOS -> deviceVideos(context, null)
+        MyContentKind.DEVICE_FOLDER -> deviceVideos(context, content.libraryId)
         else -> jellyfinItems(content)
     }
 
@@ -260,24 +269,19 @@ object MyChannels {
                 ).joinToString(" · ") else it.productionYear?.toString(),
                 desc = it.overview,
                 durationMs = ms,
+                image = client.wideUrl(it) ?: client.posterUrl(it),
             )
         }
     }
 
-    /** Videos on the TV's storage and any USB drive plugged in (Android indexes both). Needs the video permission. */
-    private suspend fun deviceVideos(context: Context): List<MyItem> = withContext(Dispatchers.IO) {
-        val out = ArrayList<MyItem>()
-        val cols = arrayOf(MediaStore.Video.Media._ID, MediaStore.Video.Media.TITLE, MediaStore.Video.Media.DISPLAY_NAME, MediaStore.Video.Media.DURATION)
-        context.contentResolver.query(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, cols, null, null, "${MediaStore.Video.Media.TITLE} ASC")?.use { c ->
-            while (c.moveToNext()) {
-                val dur = c.getLong(3)
-                if (dur < 60_000) continue // skip clips and samples
-                // Embedded titles sometimes carry a web address ("Title - http://..."): keep just the title.
-                val title = (c.getString(1)?.takeIf { it.isNotBlank() } ?: c.getString(2)?.substringBeforeLast('.') ?: "Video")
-                    .replace(Regex("""\s+-\s+https?://\S+$"""), "").trim()
-                out.add(MyItem(ref = "local:${c.getLong(0)}", title = title, durationMs = dur))
-            }
-        }
-        out
-    }
+    /** Videos on the TV's storage and any USB drive plugged in (all of them, or one [folder]). */
+    private suspend fun deviceVideos(context: Context, folder: String?): List<MyItem> =
+        LocalLibrary.scan(context)
+            .filter { it.durationMs >= 60_000 && (folder == null || it.folder == folder) } // skip clips and samples
+            .sortedBy { it.title.lowercase() }
+            .map { MyItem(ref = it.ref, title = it.title, durationMs = it.durationMs, image = it.image) }
+
+    /** The channel already made from [folder], if any. */
+    fun forFolder(folder: String): MyChannel? =
+        _channels.value.firstOrNull { it.content.kind == MyContentKind.DEVICE_FOLDER && it.content.libraryId == folder }
 }

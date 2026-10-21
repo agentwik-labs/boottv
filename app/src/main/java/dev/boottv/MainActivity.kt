@@ -48,6 +48,7 @@ import dev.boottv.launcher.HomeSignals
 import dev.boottv.livetv.liveTvGraph
 import dev.boottv.livetv.LiveTvRepository
 import dev.boottv.livetv.TvProvider
+import dev.boottv.localmedia.localMediaGraph
 import dev.boottv.remote.RemoteButtons
 import androidx.compose.runtime.SideEffect
 import dev.boottv.search.SearchScreen
@@ -131,6 +132,7 @@ class MainActivity : ComponentActivity() {
                             composable(Routes.HOME) { HomeScreen(nav) }
                             composable(Routes.SEARCH) { SearchScreen(nav) }
                             composable(Routes.SETTINGS) { SettingsScreen(nav) }
+                            localMediaGraph(nav)
                             jellyfinGraph(nav)
                             liveTvGraph(nav)
                             browserGraph(nav)
@@ -145,7 +147,6 @@ class MainActivity : ComponentActivity() {
                             onSelect = { target ->
                                 when {
                                     // Live TV can be set to open the TV provider's app (Settings › Live TV).
-                                    target == Routes.LIVE && TvProvider.liveOpensProvider(this@MainActivity) -> TvProvider.open(this@MainActivity)
                                     target != topLevel -> nav.navigateTopLevel(target)
                                     // On a nested screen of this section: go back to its root.
                                     route?.substringBefore('?') != target.substringBefore('?') ->
@@ -199,7 +200,7 @@ class MainActivity : ComponentActivity() {
         val inPlayer = currentRoute?.startsWith("live/play") == true
         val hot = RemoteButtons.mappings.value[code]?.route ?: when (code) {
             // Hot keys that work in BootTV without any setup.
-            KeyEvent.KEYCODE_GUIDE, KeyEvent.KEYCODE_TV -> if (TvProvider.liveOpensProvider(this)) TvProvider.ROUTE else Routes.LIVE
+            KeyEvent.KEYCODE_GUIDE, KeyEvent.KEYCODE_TV -> Routes.LIVE
             KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_CHANNEL_DOWN, KeyEvent.KEYCODE_LAST_CHANNEL ->
                 RemoteButtons.LAST_CHANNEL.takeIf { !inPlayer } // the player changes channel with these itself
             else -> null
@@ -239,7 +240,7 @@ class MainActivity : ComponentActivity() {
 
         /** Full-screen players: no side menu at all (not composed, never takes focus). */
         fun isFullScreen(route: String?): Boolean =
-            route != null && (route.startsWith("media/play") || route.startsWith("live/play") || route.startsWith("free/play"))
+            route != null && (route.startsWith("media/play") || route.startsWith("media/local/") || route.startsWith("live/play") || route.startsWith("free/play"))
 
         fun NavHostController.navigateTopLevel(target: String) {
             navigate(target) {

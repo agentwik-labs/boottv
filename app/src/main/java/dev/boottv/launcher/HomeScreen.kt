@@ -1,5 +1,7 @@
 package dev.boottv.launcher
 
+import dev.boottv.core.ui.RowTitle
+import dev.boottv.core.ui.PartnerSprite
 import dev.boottv.core.ui.PocketWordmark
 import dev.boottv.core.ui.BootCard
 import androidx.activity.compose.ReportDrawnWhen
@@ -375,55 +377,8 @@ fun HomeScreen(nav: NavController) {
                 )
                 Spacer(Modifier.height(BootDimens.RowSpacing))
             }
-            if (BootColors.theme.playful && HomeFeed.pokemon.isNotEmpty()) {
-                OnNowRow(
-                    channels = HomeFeed.pokemon,
-                    requester = ::requester,
-                    onFocused = onFeedFocused,
-                    onWatch = { nav.navigate("live/play/${it.id}") },
-                    title = "Pokémon on now",
-                    keyPrefix = "feed:poke:",
-                )
-                Spacer(Modifier.height(BootDimens.RowSpacing))
-            }
-            if (HomeFeed.cartoons.isNotEmpty()) {
-                OnNowRow(
-                    channels = HomeFeed.cartoons,
-                    requester = ::requester,
-                    onFocused = onFeedFocused,
-                    onWatch = { nav.navigate("live/play/${it.id}") },
-                    title = "Cartoons & Anime",
-                    keyPrefix = "feed:toon:",
-                )
-                Spacer(Modifier.height(BootDimens.RowSpacing))
-            }
         }
-        if (movingPkg == null) {
-            WebAppsRow(
-                apps = webApps,
-                requester = ::requester,
-                onFocused = { k, f -> lastFocused = k; if (showFeed && f != null) featured = f },
-                onOpen = { nav.navigate(browserRoute(it.url)) },
-                onOptions = { webOptions = it },
-                onAdd = { addingWebApp = true },
-            )
-            Spacer(Modifier.height(BootDimens.RowSpacing))
-        }
-        // Free legal apps not installed yet; once installed they show up in the Apps grid instead.
-        val toInstall = remember(allApps) {
-            val installed = allApps.map { it.packageName }.toSet()
-            FreeApps.filter { it.pkg !in installed }
-        }
-        if (movingPkg == null && apps != null && toInstall.isNotEmpty()) {
-            FreeAppsRow(
-                apps = toInstall,
-                requester = ::requester,
-                onFocused = { k, f -> lastFocused = k; if (showFeed) featured = f },
-                onOpen = { openStoreListing(context, it) },
-            )
-            Spacer(Modifier.height(BootDimens.RowSpacing))
-        }
-
+        // Your apps come right after what's on now, like a Roku home screen; the extra rows follow below.
         if (s.showFavorites && favorites.isNotEmpty() && movingPkg == null) {
             SectionTitle("Favorites")
             Row(
@@ -495,6 +450,56 @@ fun HomeScreen(nav: NavController) {
                     }
                 }
             }
+        }
+        Spacer(Modifier.height(BootDimens.RowSpacing))
+        if (showFeed) {
+            if (BootColors.theme.playful && HomeFeed.pokemon.isNotEmpty()) {
+                OnNowRow(
+                    channels = HomeFeed.pokemon,
+                    requester = ::requester,
+                    onFocused = onFeedFocused,
+                    onWatch = { nav.navigate("live/play/${it.id}") },
+                    title = "Pokémon on now",
+                    keyPrefix = "feed:poke:",
+                )
+                Spacer(Modifier.height(BootDimens.RowSpacing))
+            }
+            if (HomeFeed.cartoons.isNotEmpty()) {
+                OnNowRow(
+                    channels = HomeFeed.cartoons,
+                    requester = ::requester,
+                    onFocused = onFeedFocused,
+                    onWatch = { nav.navigate("live/play/${it.id}") },
+                    title = "Cartoons & Anime",
+                    keyPrefix = "feed:toon:",
+                )
+                Spacer(Modifier.height(BootDimens.RowSpacing))
+            }
+        }
+        if (movingPkg == null) {
+            WebAppsRow(
+                apps = webApps,
+                requester = ::requester,
+                onFocused = { k, f -> lastFocused = k; if (showFeed && f != null) featured = f },
+                onOpen = { nav.navigate(browserRoute(it.url)) },
+                onOptions = { webOptions = it },
+                onAdd = { addingWebApp = true },
+            )
+            Spacer(Modifier.height(BootDimens.RowSpacing))
+        }
+        // Free legal apps not installed yet; once installed they show up in the Apps grid instead.
+        val toInstall = remember(allApps) {
+            val installed = allApps.map { it.packageName }.toSet()
+            FreeApps.filter { it.pkg !in installed }
+        }
+        if (movingPkg == null && apps != null && toInstall.isNotEmpty()) {
+            FreeAppsRow(
+                apps = toInstall,
+                requester = ::requester,
+                onFocused = { k, f -> lastFocused = k; if (showFeed) featured = f },
+                onOpen = { openStoreListing(context, it) },
+            )
+            Spacer(Modifier.height(BootDimens.RowSpacing))
         }
         Spacer(Modifier.height(48.dp))
     }
@@ -619,15 +624,7 @@ private val MinimalScrollSpec = object : BringIntoViewSpec {
 }
 
 @Composable
-private fun SectionTitle(text: String, hint: String? = null) {
-    Row(verticalAlignment = Alignment.Bottom) {
-        Text(text, style = MaterialTheme.typography.titleMedium, color = BootColors.TextPrimary.copy(alpha = 0.9f))
-        if (hint != null) {
-            Spacer(Modifier.width(12.dp))
-            Text(hint, style = MaterialTheme.typography.bodySmall, color = BootColors.TextSecondary.copy(alpha = 0.7f))
-        }
-    }
-}
+private fun SectionTitle(text: String, hint: String? = null) = RowTitle(text, hint = hint)
 
 @Composable
 private fun HomeTopBar(movingLabel: String?, compact: Boolean = false) {
@@ -647,6 +644,8 @@ private fun HomeTopBar(movingLabel: String?, compact: Boolean = false) {
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
+        // Your partner Pokémon keeps you company by the clock.
+        PartnerSprite(72.dp, Modifier.padding(end = 12.dp))
         Clock()
     }
 }

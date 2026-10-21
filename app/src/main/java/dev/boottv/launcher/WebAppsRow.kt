@@ -1,5 +1,6 @@
 package dev.boottv.launcher
 
+import dev.boottv.core.ui.RowTitle
 import dev.boottv.core.ui.BootCard
 import dev.boottv.core.ui.leftToMenu
 import androidx.compose.foundation.BorderStroke
@@ -77,15 +78,7 @@ internal fun WebAppsRow(
     onAdd: () -> Unit,
 ) {
     Column(Modifier.fillMaxWidth()) {
-        Row(verticalAlignment = Alignment.Bottom) {
-            Text("Web apps", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = BootColors.TextPrimary)
-            Spacer(Modifier.width(12.dp))
-            Text(
-                if (apps.isEmpty()) "Turn any website into an app" else "Hold OK for options",
-                style = MaterialTheme.typography.bodySmall,
-                color = BootColors.TextSecondary,
-            )
-        }
+        RowTitle("Web apps", hint = if (apps.isEmpty()) "Turn any website into an app" else "Hold OK for options")
         LazyRow(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(BootDimens.CardSpacing),

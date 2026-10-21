@@ -18,6 +18,9 @@ import androidx.core.content.res.ResourcesCompat
 import dev.boottv.R
 import dev.boottv.core.Routes
 import dev.boottv.core.ui.BootColors
+import dev.boottv.core.ui.Sprites
+import coil.imageLoader
+import coil.request.ImageRequest
 import androidx.compose.ui.graphics.toArgb
 import dev.boottv.livetv.TvProvider
 
@@ -33,15 +36,16 @@ class QuickMenu(private val service: AccessibilityService) {
 
     private fun dp(v: Int) = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v.toFloat(), service.resources.displayMetrics).toInt()
 
-    private fun entries(): List<Pair<String, String>> = buildList {
-        add("Home" to Routes.HOME)
-        add("Live TV guide" to Routes.LIVE)
-        if (TvProvider.installedPackage(service) != null) add(TvProvider.NAME to TvProvider.ROUTE)
-        add("Cartoons" to Routes.TOONS)
-        add("Free Movies" to Routes.FREE)
-        add("My Media" to Routes.MEDIA)
-        add("Search" to Routes.SEARCH)
-        add("Settings" to Routes.SETTINGS)
+    /** Label, route, and the Pokémon shown beside it in the Pocket Monsters theme (same as the side menu). */
+    private fun entries(): List<Triple<String, String, Int>> = buildList {
+        add(Triple("Home", Routes.HOME, 25))
+        add(Triple("Live TV guide", Routes.LIVE, 479))
+        if (TvProvider.installedPackage(service) != null) add(Triple(TvProvider.NAME, TvProvider.ROUTE, 100))
+        add(Triple("Cartoons", Routes.TOONS, 39))
+        add(Triple("Free Movies", Routes.FREE, 52))
+        add(Triple("My Media", Routes.MEDIA, 235))
+        add(Triple("Search", Routes.SEARCH, 164))
+        add(Triple("Settings", Routes.SETTINGS, 81))
     }
 
     fun show() {
@@ -62,19 +66,30 @@ class QuickMenu(private val service: AccessibilityService) {
             background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(bg.copy(alpha = 0.97f).toArgb(), bg.copy(alpha = 0.9f).toArgb()))
         }
         panel.addView(TextView(service).apply {
-            text = if (BootColors.theme.playful) "◓  BootTV" else "BootTV"
+            text = "BootTV"
             setTextColor(if (BootColors.theme.playful) 0xFFFFCB05.toInt() else Color.WHITE)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
             typeface = runCatching { ResourcesCompat.getFont(service, if (BootColors.theme.playful) R.font.fredoka_bold else R.font.inter_semibold) }.getOrNull()
             setPadding(dp(14), 0, 0, dp(16))
         })
         var first: View? = null
-        for ((label, route) in entries()) {
+        for ((label, route, sprite) in entries()) {
             val item = TextView(service).apply {
                 text = label
+                if (Sprites.on) {
+                    // A pixel sprite before the label, loaded (and cached) like the rest of BootTV's images.
+                    val size = dp(40)
+                    compoundDrawablePadding = dp(8)
+                    service.imageLoader.enqueue(
+                        ImageRequest.Builder(service).data(Sprites.still(sprite)).size(size).allowHardware(false)
+                            .target { d -> d.setBounds(0, 0, size, size); (d as? android.graphics.drawable.BitmapDrawable)?.paint?.isFilterBitmap = false; setCompoundDrawables(d, null, null, null) }
+                            .build()
+                    )
+                }
                 typeface = font
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
-                setPadding(dp(18), dp(11), dp(18), dp(11))
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(if (Sprites.on) 8 else 18), dp(if (Sprites.on) 4 else 11), dp(18), dp(if (Sprites.on) 4 else 11))
                 isFocusable = true
                 isClickable = true
                 background = StateListDrawable().apply {
