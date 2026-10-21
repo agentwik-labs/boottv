@@ -94,13 +94,43 @@ object Sprites {
         }
     }
 
-    /** Pokémon-type colours for placeholder tiles (Fire, Water, Grass, Electric, Psychic, Fairy, Dragon, Ice). */
-    private val typeColors = listOf(
-        Color(0xFFEE8130), Color(0xFF6390F0), Color(0xFF7AC74C), Color(0xFFF7D02C),
-        Color(0xFFF95587), Color(0xFFD685AD), Color(0xFF6F35FC), Color(0xFF96D9D6),
-    )
+    fun colorFor(key: String): Color = PokeType.of(key).color
+}
 
-    fun colorFor(key: String): Color = typeColors[(key.hashCode() and 0x7fffffff) % typeColors.size]
+/** The games' elemental types, used as BootTV's colour system: every folder, genre and channel gets one. */
+enum class PokeType(val label: String, val color: Color, val sprite: Int) {
+    NORMAL("Normal", Color(0xFFA8A77A), 133), FIRE("Fire", Color(0xFFEE8130), 4), WATER("Water", Color(0xFF6390F0), 7),
+    ELECTRIC("Electric", Color(0xFFF7D02C), 25), GRASS("Grass", Color(0xFF7AC74C), 1), ICE("Ice", Color(0xFF96D9D6), 363),
+    FIGHTING("Fighting", Color(0xFFC22E28), 66), POISON("Poison", Color(0xFFA33EA1), 88), GROUND("Ground", Color(0xFFE2BF65), 50),
+    FLYING("Flying", Color(0xFFA98FF3), 16), PSYCHIC("Psychic", Color(0xFFF95587), 63), BUG("Bug", Color(0xFFA6B91A), 10),
+    ROCK("Rock", Color(0xFFB6A136), 74), GHOST("Ghost", Color(0xFF735797), 92), DRAGON("Dragon", Color(0xFF6F35FC), 147),
+    DARK("Dark", Color(0xFF705746), 197), STEEL("Steel", Color(0xFFB7B7CE), 81), FAIRY("Fairy", Color(0xFFD685AD), 39);
+
+    companion object {
+        /** A fitting type for a folder, genre or channel name; otherwise the same hashed type every time. */
+        fun of(name: String): PokeType {
+            val t = name.lowercase()
+            return when {
+                "pok" in t || "electr" in t || "music" in t -> ELECTRIC
+                "horror" in t || "scary" in t || "halloween" in t || "ghost" in t -> GHOST
+                "anime" in t || "dragon" in t -> DRAGON
+                "cartoon" in t || "kids" in t || "toon" in t || "family" in t -> FAIRY
+                "comedy" in t || "funny" in t -> NORMAL
+                "action" in t || "sport" in t || "fight" in t || "wrestl" in t -> FIGHTING
+                "nature" in t || "garden" in t || "outdoor" in t || "travel" in t -> GRASS
+                "ocean" in t || "sea" in t || "swim" in t || "fish" in t || "beach" in t -> WATER
+                "news" in t || "science" in t || "document" in t || "learn" in t -> PSYCHIC
+                "movie" in t || "film" in t || "cinema" in t -> FIRE
+                "home" in t || "camera" in t || "vacation" in t -> NORMAL
+                "winter" in t || "christmas" in t || "snow" in t -> ICE
+                "night" in t || "crime" in t || "noir" in t -> DARK
+                "sky" in t || "bird" in t || "plane" in t -> FLYING
+                "tech" in t || "robot" in t || "game" in t -> STEEL
+                "rock" in t || "metal" in t -> ROCK
+                else -> entries[(t.hashCode() and 0x7fffffff) % entries.size]
+            }
+        }
+    }
 }
 
 /** One Pokémon sprite, kept pixel-sharp when scaled up. */
