@@ -233,9 +233,15 @@ object LocalLibrary {
         return (partial + shows).distinctBy { it.id }
     }
 
-    /** "Title - http://..." (some files carry a web address in their title) or a file name, made readable. */
+    /**
+     * The name you gave the file, made readable ("Harbor_Lights.1948" -> "Harbor Lights 1948"). The title tag inside
+     * the file is used only when the file name is nothing but a camera/download number (IMG_1234, VID-20240101,
+     * download), since tags often carry the wrong title or a web address.
+     */
     fun cleanTitle(title: String?, fileBase: String): String {
-        val t = title?.takeIf { it.isNotBlank() && it != fileBase } ?: fileBase.replace('_', ' ').replace('.', ' ')
+        val fromName = fileBase.replace('_', ' ').replace('.', ' ').replace(Regex("""\s+"""), " ").trim()
+        val meaningless = Regex("""(?i)^(img|vid|mov|dsc|pxl|video|movie|download|untitled|clip)?[ _-]*\d[\d _-]*$""")
+        val t = if (meaningless.matches(fromName) || fromName.isEmpty()) title?.takeIf { it.isNotBlank() } ?: fromName else fromName
         return t.replace(Regex("""\s+-\s+https?://\S+$"""), "").trim().ifEmpty { "Video" }
     }
 
