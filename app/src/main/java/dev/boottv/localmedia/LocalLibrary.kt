@@ -155,12 +155,19 @@ object LocalLibrary {
                 val folder = under.substringBefore('/').takeIf { under.isNotBlank() } ?: c.getString(4)?.takeIf { it.isNotBlank() } ?: "Videos"
                 val subfolder = if (under.isNotBlank()) under.substringAfter('/', "") else ""
                 val dir = safeName(folder)
+                val relDir = rel.lowercase()
+                // Own picture first (beside the video, or sent with it), then poster.jpg in its folder and each folder above.
+                var poster = posters["${c.getLong(7)}/${base.lowercase()}"] ?: posters["$dir/${base.lowercase()}"] ?: posters["p:$relDir/${base.lowercase()}"]
+                var walk = relDir
+                while (poster == null && walk.isNotEmpty()) {
+                    poster = posters["p:$walk/"]
+                    walk = walk.substringBeforeLast('/', "")
+                }
+                poster = poster ?: posters["${c.getLong(7)}/"] ?: posters["$dir/"]
                 out.add(
                     fromPath(
                         id = c.getLong(0), rawTitle = c.getString(1), fileName = file, folder = folder, subfolder = subfolder,
-                        durationMs = dur, addedAt = c.getLong(5) * 1000, sizeBytes = c.getLong(6),
-                        poster = posters["${c.getLong(7)}/${base.lowercase()}"] ?: posters["$dir/${base.lowercase()}"]
-                            ?: posters["${c.getLong(7)}/"] ?: posters["$dir/"],
+                        durationMs = dur, addedAt = c.getLong(5) * 1000, sizeBytes = c.getLong(6), poster = poster,
                     )
                 )
             }
@@ -253,13 +260,18 @@ object LocalLibrary {
         }
         // Pictures sitting next to the videos (a USB drive with movie.mkv + movie.jpg). Needs the photos permission.
         if (Build.VERSION.SDK_INT < 33 || ContextCompat.checkSelfPermission(context, Manifest.permission.READ_MEDIA_IMAGES) == PackageManager.PERMISSION_GRANTED) {
-            val cols = arrayOf(MediaStore.Images.Media._ID, MediaStore.Images.Media.DISPLAY_NAME, MediaStore.Images.Media.BUCKET_ID)
+            @Suppress("DEPRECATION")
+            val pathCol = if (Build.VERSION.SDK_INT >= 29) MediaStore.Images.Media.RELATIVE_PATH else MediaStore.Images.Media.DATA
+            val cols = arrayOf(MediaStore.Images.Media._ID, MediaStore.Images.Media.DISPLAY_NAME, MediaStore.Images.Media.BUCKET_ID, pathCol)
             runCatching {
                 context.contentResolver.query(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, cols, null, null, null)?.use { c ->
                     while (c.moveToNext()) {
                         val base = c.getString(1).orEmpty().substringBeforeLast('.').lowercase()
                         val uri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, c.getLong(0)).toString()
                         map.putIfAbsent(if (base in posterNames) "${c.getLong(2)}/" else "${c.getLong(2)}/$base", uri)
+                        // Also by folder path, so a show's poster.jpg reaches the episodes in its Season folders.
+                        val rel = c.getString(3).orEmpty().replace('\\', '/').trimEnd('/').substringBeforeLast('/', "").trimEnd('/').lowercase()
+                        if (rel.isNotEmpty()) map.putIfAbsent(if (base in posterNames) "p:$rel/" else "p:$rel/$base", uri)
                     }
                 }
             }

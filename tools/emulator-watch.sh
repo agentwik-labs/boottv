@@ -29,6 +29,10 @@ restart() {
   warn "Emulator window stopped taking input ($1). Restarting it..."
   "$ROOT_DIR/tools/emulator.sh" --restart --no-install >/dev/null 2>&1 || warn "emulator.sh --restart failed"
   LOG="$ROOT_DIR/build/emulator.log"
+  # Start counting afresh from the new emulator's log (the old one may still be on disk for a moment).
+  sleep 5
+  seen=$(grep -c "$SIGNATURE" "$LOG" 2>/dev/null || true); seen=${seen:-0}
+  hangs=$(grep -c "$HANG" "$LOG" 2>/dev/null || true); hangs=${hangs:-0}
   info "Emulator back. Keys should work again; if BootTV isn't showing, press Home."
 }
 
@@ -39,13 +43,13 @@ while :; do
     n=$(grep -c "$SIGNATURE" "$LOG" 2>/dev/null || true); n=${n:-0}
     h=$(grep -c "$HANG" "$LOG" 2>/dev/null || true); h=${h:-0}
     if [ "$n" -gt "$seen" ]; then
-      restart "clicks are not reaching the TV"; seen=0; hangs=0
+      restart "clicks are not reaching the TV"
       [ "$ONCE" -eq 1 ] && exit 0
       sleep 20; continue
     fi
     # A long freeze under build load ends the same way; treat several hangs as the same fault.
     if [ "$h" -ge $((hangs + 6)) ]; then
-      restart "the emulator froze for a while"; seen=0; hangs=0
+      restart "the emulator froze for a while"
       [ "$ONCE" -eq 1 ] && exit 0
       sleep 20; continue
     fi
