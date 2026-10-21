@@ -177,6 +177,15 @@ fun MyMediaScreen(nav: NavController) {
         )
         add(
             DexSection.Action(
+                "cloud", if (CloudLibrary.url != null) CloudLibrary.name else "Cloud library", if (CloudLibrary.url != null) "${CloudLibrary.videos.size} videos streaming" else "Stream from your own bucket",
+                if (CloudLibrary.url != null) "Your videos stream from the cloud; nothing has to stay on at home. Its folders and shows are listed on the left." +
+                    (CloudLibrary.error?.let { "\n\n$it" } ?: "")
+                else "Put your videos in a Cloudflare R2 or S3 bucket (see README › Cloud library), paste the index address under Settings › My Media, and they appear here with seasons, posters and channels. No computer has to stay on.",
+                334, if (CloudLibrary.url != null) "Refresh" else "Set up",
+            ) { if (CloudLibrary.url != null) scope.launch { status = CloudLibrary.refresh(context) } else nav.navigate(dev.boottv.core.Routes.SETTINGS) }
+        )
+        add(
+            DexSection.Action(
                 "server", if (hasServer) "Your Mac library" else "Connect your Mac", "Movies and shows from Jellyfin",
                 "Your Mac's movies and shows with artwork, episodes and resume, streamed over Wi-Fi.", 137, if (hasServer) "Open library" else "Set up",
             ) { nav.navigate(MEDIA_SERVER_ROUTE) }
@@ -306,7 +315,7 @@ private fun SectionLine(s: DexSection, selected: Boolean, modifier: Modifier, on
             Column(Modifier.weight(1f)) {
                 Text(s.title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 val sub = when (s) {
-                    is DexSection.Videos -> if (s.show) "SERIES  ${s.videos.mapNotNull { it.season }.distinct().size.let { if (it > 1) "$it SEASONS  " else "" }}${s.videos.size} EP" else "${s.type.label.uppercase()}  ${s.videos.size}"
+                    is DexSection.Videos -> (if (s.videos.any { it.isRemote }) "☁ " else "") + if (s.show) "SERIES  ${s.videos.mapNotNull { it.season }.distinct().size.let { if (it > 1) "$it SEASONS  " else "" }}${s.videos.size} EP" else "${s.type.label.uppercase()}  ${s.videos.size}"
                     is DexSection.Channels -> "${s.channels.size} ON AIR"
                     is DexSection.Action -> s.line.uppercase()
                 }
@@ -497,8 +506,8 @@ private fun StatusStrip(section: DexSection, v: LocalVideo?, c: OnNow?, numbers:
                     }
                     Text(
                         listOfNotNull(
-                            v.folder, v.subfolder.takeIf { it.isNotEmpty() }, formatClock(v.durationMs), formatSize(v.sizeBytes),
-                            "added " + DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(v.addedAt)),
+                            v.folder, v.subfolder.takeIf { it.isNotEmpty() }, formatClock(v.durationMs), if (v.isRemote) "☁ cloud" else formatSize(v.sizeBytes),
+                            v.addedAt.takeIf { it > 0 }?.let { "added " + DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(it)) },
                             seen?.let { "${(it.fraction * 100).toInt()}% seen" } ?: if (LocalProgress.isWatched(v.id)) "watched ✓" else "not played yet",
                         ).joinToString("  ·  "),
                         style = MaterialTheme.typography.bodySmall, color = BootColors.TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis,

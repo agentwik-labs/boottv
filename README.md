@@ -142,8 +142,43 @@ tools/profile.sh --benchmark  # startup time and frame timing, without vs. with 
 
 ## Your own movies and shows
 
-See **[docs/jellyfin.md](docs/jellyfin.md)**: install Jellyfin on the Mac, point it at
-your folders, then BootTV → Settings → My Media → Discover / Quick Connect.
+Three ways, from simplest to biggest. Lay the folder out the same way for all of them:
+
+```
+Pokémon Indigo League/                 ← folder = show name (and the channel's name)
+  poster.jpg                           ← artwork for the whole show
+  Season 1/
+    S01E01 - Pokémon, I Choose You!.mp4
+    S01E01 - Pokémon, I Choose You!.jpg   (optional poster for one episode)
+Movies/
+  Spirited Away (2001).mp4
+  Spirited Away (2001).jpg
+```
+
+Episodes are recognised from `S01E03`, `1x03` or `Episode 3` in the file name (or a bare number inside a
+`Season N` folder); the text after ` - ` becomes the episode title. MP4 (H.264/AAC) plays everywhere; MKV, MOV,
+WebM and TS usually do too.
+
+1. **Copy from the Mac** (instant, nothing to run afterwards): `tools/media.sh ~/Videos/BootTV` copies a folder
+   onto the device over the debugging connection and indexes it, or `tools/install.sh --media ~/Videos/BootTV` does
+   it in the same go as installing BootTV. Run it again any time to add more; `--replace` starts over. The Xiaomi
+   stick has about 5 GB free (a few seasons at phone quality), so this holds favourites rather than a whole library.
+2. **Send to TV** (My Media › Send from your phone): any phone or computer on the Wi-Fi uploads videos or a whole
+   folder from its browser, no debugging connection needed.
+3. **Cloud library** (no computer has to stay on): put the folder in a bucket and let the TV stream from it.
+   ```bash
+   brew install ffmpeg rclone                       # ffprobe reads durations; rclone uploads
+   tools/cloud-index.py ~/Videos/BootTV --name "Our library"   # writes boottv.json next to the videos
+   rclone sync ~/Videos/BootTV r2:my-bucket/media --progress   # or: aws s3 sync ~/Videos/BootTV s3://my-bucket/media
+   ```
+   Then Settings › My Media › Cloud library → paste the address of `boottv.json`. Its shows, seasons, posters and
+   channels work like local videos; progress and ✓ marks are kept on the TV. **Cloudflare R2** is the sensible
+   host: storage about $0.015 per GB a month and no charge for streaming out (S3 charges about $0.09 per GB
+   watched). The bucket (or a folder in it with an unguessable name) must be readable by URL; keep it to your own
+   videos.
+
+Also: **Jellyfin** on a Mac that stays on ([docs/jellyfin.md](docs/jellyfin.md)) for a full media-server
+experience with metadata lookup and transcoding.
 
 ## Project layout
 

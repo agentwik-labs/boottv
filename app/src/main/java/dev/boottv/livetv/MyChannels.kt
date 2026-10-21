@@ -210,6 +210,7 @@ object MyChannels {
     }
 
     private suspend fun streamFor(item: MyItem): Pair<Uri, Boolean> = when {
+        item.ref.startsWith("url:") -> Uri.parse(item.ref.removePrefix("url:")) to item.ref.endsWith(".m3u8", ignoreCase = true)
         item.ref.startsWith("local:") -> {
             val id = item.ref.removePrefix("local:").toLong()
             ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, id) to false
@@ -278,7 +279,7 @@ object MyChannels {
 
     /** Videos on the TV's storage and any USB drive plugged in (all of them, or one [folder]). */
     private suspend fun deviceVideos(context: Context, folder: String?): List<MyItem> =
-        LocalLibrary.scan(context)
+        LocalLibrary.all(context)
             .filter { it.durationMs >= 60_000 && (folder == null || it.folder == folder) } // skip clips and samples
             .sortedWith(compareBy({ it.folder.lowercase() }, { it.season ?: 0 }, { it.episode ?: 0 }, { it.title.lowercase() }))
             .map {

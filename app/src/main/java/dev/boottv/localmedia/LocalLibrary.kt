@@ -41,14 +41,17 @@ data class LocalVideo(
     /** Season and episode numbers read from the file name ("S01E03", "1x03", "Episode 3") or a "Season 2" folder. */
     val season: Int? = null,
     val episode: Int? = null,
+    /** Set for a video streamed from the cloud library; null for one on the TV. */
+    val remote: String? = null,
 ) {
-    val uri: Uri get() = ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, id)
+    val uri: Uri get() = remote?.let(Uri::parse) ?: ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, id)
+    val isRemote: Boolean get() = remote != null
     val isEpisode: Boolean get() = episode != null
     /** "S1 E3" (or "E3" when there is no season). */
     val episodeLabel: String get() = listOfNotNull(season?.let { "S$it" }, episode?.let { "E$it" }).joinToString(" ")
-    /** The poster, or else a frame from the video itself. */
-    val image: String get() = poster ?: uri.toString()
-    val ref: String get() = "local:$id"
+    /** The poster, or else a frame from the video itself (not for a cloud video: that would download it). */
+    val image: String? get() = poster ?: if (remote == null) uri.toString() else null
+    val ref: String get() = if (remote != null) "url:$remote" else "local:$id"
 }
 
 /**
@@ -96,7 +99,9 @@ object LocalLibrary {
 
     suspend fun refresh(context: Context) {
         permitted = hasPermission(context)
-        videos = runCatching { scan(context) }.onFailure { Log.w(TAG, "scan", it) }.getOrDefault(videos)
+        runCatching { CloudLibrary.start(context) }.onFailure { Log.w(TAG, "cloud", it) }
+        val local = runCatching { scan(context) }.onFailure { Log.w(TAG, "scan", it) }.getOrDefault(videos.filter { !it.isRemote })
+        videos = local + CloudLibrary.videos
         loaded = true
     }
 
@@ -108,6 +113,23 @@ object LocalLibrary {
             .map { (f, v) -> f to if (v.any { it.isEpisode }) v.sortedWith(episodeOrder) else v.sortedByDescending { it.addedAt } }
 
     fun recentlyAdded(limit: Int = 20): List<LocalVideo> = videos.sortedByDescending { it.addedAt }.take(limit)
+
+    /** Videos on the TV plus the cloud library, for channels. */
+    suspend fun all(context: Context): List<LocalVideo> {
+        runCatching { CloudLibrary.start(context) }
+        return scan(context) + CloudLibrary.videos
+    }
+
+    /** One entry from its path and facts, applying the naming rules (used for videos on the TV and in the cloud). */
+    fun fromPath(id: Long, rawTitle: String?, fileName: String, folder: String, subfolder: String, durationMs: Long, addedAt: Long, sizeBytes: Long, poster: String?, remote: String? = null): LocalVideo {
+        val base = fileName.substringBeforeLast('.')
+        val parsed = parseEpisode(base, subfolder)
+        return LocalVideo(
+            id = id, title = parsed?.title ?: cleanTitle(rawTitle, base), folder = folder, subfolder = subfolder,
+            season = parsed?.season, episode = parsed?.episode, durationMs = durationMs, addedAt = addedAt, sizeBytes = sizeBytes,
+            poster = poster, remote = remote,
+        )
+    }
 
     /** Every video Android has indexed. Without the permission, only the ones BootTV saved itself. */
     suspend fun scan(context: Context): List<LocalVideo> = withContext(Dispatchers.IO) {
@@ -133,18 +155,10 @@ object LocalLibrary {
                 val folder = under.substringBefore('/').takeIf { under.isNotBlank() } ?: c.getString(4)?.takeIf { it.isNotBlank() } ?: "Videos"
                 val subfolder = if (under.isNotBlank()) under.substringAfter('/', "") else ""
                 val dir = safeName(folder)
-                val parsed = parseEpisode(base, subfolder)
                 out.add(
-                    LocalVideo(
-                        id = c.getLong(0),
-                        title = parsed?.title ?: cleanTitle(c.getString(1), base),
-                        subfolder = subfolder,
-                        season = parsed?.season,
-                        episode = parsed?.episode,
-                        folder = folder,
-                        durationMs = dur,
-                        addedAt = c.getLong(5) * 1000,
-                        sizeBytes = c.getLong(6),
+                    fromPath(
+                        id = c.getLong(0), rawTitle = c.getString(1), fileName = file, folder = folder, subfolder = subfolder,
+                        durationMs = dur, addedAt = c.getLong(5) * 1000, sizeBytes = c.getLong(6),
                         poster = posters["${c.getLong(7)}/${base.lowercase()}"] ?: posters["$dir/${base.lowercase()}"]
                             ?: posters["${c.getLong(7)}/"] ?: posters["$dir/"],
                     )

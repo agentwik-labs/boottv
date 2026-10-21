@@ -203,7 +203,8 @@ private fun SettingsContent(s: BootSettings) {
                 .focusGroup(),
         ) {
             when (selected) {
-                Category.MyMedia -> ExternalSection("My Media") { JellyfinSettingsSection() }
+                Category.MyMedia -> ExternalSection("My Media") { JellyfinSettingsSection()
+            dev.boottv.localmedia.CloudLibrarySettings() }
                 Category.LiveTv -> ExternalSection("Live TV") { LiveTvSettingsSection() }
                 else -> Column(
                     Modifier

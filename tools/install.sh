@@ -1,18 +1,23 @@
 #!/usr/bin/env bash
 # Install dist/BootTV.apk on the device, make it the home screen, grant mic, add LocalSend, launch it.
-#   tools/install.sh [serial] [--no-localsend]
+#   tools/install.sh [serial] [--no-localsend] [--media DIR]
+# --media DIR copies a folder of your own videos onto the device (Movies/BootTV) in the same go, laid out the way
+# Send to TV expects (Show/Season 1/S01E03 - Title.mp4, poster.jpg), so they play with no computer or internet.
 set -euo pipefail
 . "$(cd "$(dirname "$0")" && pwd)/lib.sh"
 
-WITH_LOCALSEND=1
+WITH_LOCALSEND=1; MEDIA_DIR=""
 ARGS=()
-for arg in "$@"; do
-  case "$arg" in
-    -h|--help) sed -n '2,3p' "$0"; exit 0 ;;
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -h|--help) sed -n '2,5p' "$0"; exit 0 ;;
     --no-localsend) WITH_LOCALSEND=0 ;;
-    *) ARGS+=("$arg") ;;
+    --media) [ $# -ge 2 ] || die "--media needs a folder"; MEDIA_DIR="$2"; shift ;;
+    *) ARGS+=("$1") ;;
   esac
+  shift
 done
+[ -z "$MEDIA_DIR" ] || [ -d "$MEDIA_DIR" ] || die "--media: $MEDIA_DIR is not a folder"
 set -- "${ARGS[@]+"${ARGS[@]}"}"
 
 require_adb
@@ -29,6 +34,11 @@ if ! out="$(dadb install -r "$APK_PATH" 2>&1)"; then
 fi
 printf '%s' "$out" | grep -q "Success" || { printf '%s\n' "$out" >&2; die "adb install did not report Success."; }
 ok "Installed."
+
+info "Granting media permissions (your own videos and their posters, from Send to TV, USB or tools/media.sh)"
+for perm in android.permission.READ_MEDIA_VIDEO android.permission.READ_MEDIA_IMAGES android.permission.READ_EXTERNAL_STORAGE; do
+  dsh pm grant "$PKG" "$perm" >/dev/null 2>&1 || true
+done
 
 info "Granting microphone permission (voice search)"
 if dsh pm grant "$PKG" android.permission.RECORD_AUDIO >/dev/null 2>&1; then
@@ -118,3 +128,7 @@ else
   warn "Could not launch automatically; open BootTV from the apps list."
 fi
 echo "Optional: tools/debloat.sh $SERIAL --dry-run   (see what bloat/ads would be disabled)"
+
+if [ -n "$MEDIA_DIR" ]; then
+  "$TOOLS_DIR/media.sh" "$MEDIA_DIR" "$SERIAL"
+fi
