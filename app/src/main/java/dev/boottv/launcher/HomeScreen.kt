@@ -122,6 +122,12 @@ private data class PinRequest(val title: String, val message: String?, val onSuc
 
 private enum class MoveDir { Left, Right, Up, Down }
 
+private val isEmulator: Boolean by lazy {
+    val fp = android.os.Build.FINGERPRINT.lowercase(); val product = android.os.Build.PRODUCT.lowercase()
+    "emulator" in fp || "generic" in fp || "sdk_gphone" in product || "sdk_google" in product ||
+        android.os.Build.HARDWARE.lowercase().let { it == "ranchu" || it == "goldfish" }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun HomeScreen(nav: NavController) {
@@ -345,7 +351,9 @@ fun HomeScreen(nav: NavController) {
     Box(Modifier.fillMaxSize().pageBackground().onFocusChanged { homeHasFocus = it.hasFocus }) {
     CompositionLocalProvider(LocalBringIntoViewSpec provides MinimalScrollSpec) {
     // The preview stops (and frees the video decoder) once the page scrolls down to the apps.
-    if (showFeed) HomeBackdrop(featured, alpha = 1f - scroll.value / 500f, livePreview = settings?.livePreview == true && scroll.value < 300)
+    // Not on the emulator: software video decoding there starves the emulator's own window, which then stops passing
+    // the Mac's keyboard through. A real stick decodes in hardware.
+    if (showFeed) HomeBackdrop(featured, alpha = 1f - scroll.value / 500f, livePreview = settings?.livePreview == true && scroll.value < 300 && !isEmulator)
     Column(
         Modifier
             .fillMaxSize()

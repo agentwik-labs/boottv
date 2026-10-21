@@ -1,15 +1,18 @@
 #!/usr/bin/env bash
 # Boot the BootTV_API34 Android TV emulator, wait for boot, then install & launch BootTV.
-#   tools/emulator.sh [--headless] [--avd NAME] [--no-install]
+#   tools/emulator.sh [--headless] [--avd NAME] [--no-install] [--restart]
+# --restart kills a running emulator first. Use it when the emulator window stops taking keyboard/mouse input
+# (the emulator's own window layer gives up after a while; the TV inside is fine, only the window is deaf).
 set -euo pipefail
 . "$(cd "$(dirname "$0")" && pwd)/lib.sh"
 
-AVD="BootTV_API34"; HEADLESS=0; DO_INSTALL=1
+AVD="BootTV_API34"; HEADLESS=0; DO_INSTALL=1; RESTART=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --headless) HEADLESS=1 ;;
     --avd) [ $# -ge 2 ] || die "--avd needs a name"; AVD="$2"; shift ;;
     --no-install) DO_INSTALL=0 ;;
+    --restart) RESTART=1 ;;
     -h|--help) sed -n '2,3p' "$0"; exit 0 ;;
     *) die "Unknown option: $1" ;;
   esac
@@ -23,6 +26,12 @@ emulator -list-avds 2>/dev/null | grep -qx "$AVD" || die "AVD '$AVD' not found. 
 running_emulator() { adb devices | awk 'NR>1 && $1 ~ /^emulator-/ && $2=="device" {print $1; exit}'; }
 
 SERIAL="$(running_emulator || true)"
+if [ -n "$SERIAL" ] && [ "$RESTART" -eq 1 ]; then
+  info "Stopping $SERIAL"
+  adb -s "$SERIAL" emu kill >/dev/null 2>&1 || true
+  sleep 6; pkill -f qemu-system >/dev/null 2>&1 || true; sleep 2
+  SERIAL=""
+fi
 if [ -n "$SERIAL" ]; then
   info "Emulator already running: $SERIAL"
 else
@@ -33,7 +42,8 @@ else
   if [ -f "$CFG" ] && ! grep -q '^hw.keyboard *= *yes' "$CFG"; then
     sed -i '' -e '/^hw.keyboard *=/d' "$CFG" && echo "hw.keyboard = yes" >> "$CFG"
   fi
-  ARGS="-avd $AVD -no-snapshot-save -no-boot-anim"
+  # Public DNS: the emulator's built-in resolver sometimes stops answering, which looks like "web apps don't load".
+  ARGS="-avd $AVD -no-snapshot-save -no-boot-anim -dns-server 8.8.8.8,1.1.1.1"
   [ "$HEADLESS" -eq 1 ] && ARGS="$ARGS -no-window -no-audio"
   info "Starting emulator ($AVD$([ "$HEADLESS" -eq 1 ] && echo ', headless')); log: $LOG"
   # shellcheck disable=SC2086
