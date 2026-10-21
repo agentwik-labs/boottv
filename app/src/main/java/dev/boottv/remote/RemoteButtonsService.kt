@@ -75,11 +75,28 @@ class RemoteButtonsService : AccessibilityService() {
             KeyEvent.KEYCODE_GUIDE, KeyEvent.KEYCODE_TV -> Routes.LIVE
             else -> return false
         }
-        // Act on release, and swallow the press too so the button's own app doesn't also open.
+        // Volume: repeat while held, like the real key. Everything else acts on release, and swallows the press too
+        // so the button's own app doesn't also open.
+        RemoteButtons.volumeKey(route)?.let { vk ->
+            if (event.action == KeyEvent.ACTION_DOWN) adjustVolume(vk)
+            return true
+        }
         if (event.action == KeyEvent.ACTION_UP) {
             if (route == RemoteButtons.QUICK_MENU) menu.show() else RemoteButtons.open(this, route)
         }
         return true
+    }
+
+    /** One step of volume through the audio service, with the on-screen volume bar, exactly as the Volume key does. */
+    private fun adjustVolume(keyCode: Int) {
+        val am = getSystemService(AUDIO_SERVICE) as android.media.AudioManager
+        val dir = when (keyCode) {
+            KeyEvent.KEYCODE_VOLUME_UP -> android.media.AudioManager.ADJUST_RAISE
+            KeyEvent.KEYCODE_VOLUME_DOWN -> android.media.AudioManager.ADJUST_LOWER
+            else -> android.media.AudioManager.ADJUST_TOGGLE_MUTE
+        }
+        runCatching { am.adjustSuggestedStreamVolume(dir, android.media.AudioManager.USE_DEFAULT_STREAM_TYPE, android.media.AudioManager.FLAG_SHOW_UI) }
+            .onFailure { android.util.Log.w("RemoteButtons", "volume", it) }
     }
 
     /** Back held for [LONG_MS] opens the menu; a normal press is passed on as Back. */

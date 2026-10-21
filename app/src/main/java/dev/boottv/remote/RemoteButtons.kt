@@ -23,6 +23,10 @@ object RemoteButtons {
     const val LAST_CHANNEL = "live:last"
     /** BootTV's menu over the current app (handled by the remote buttons service). */
     const val QUICK_MENU = "overlay:menu"
+    /** Volume keys: the button acts as the remote's own Volume +/-, which also reaches the TV when the remote is set up for it. */
+    const val VOLUME_UP = "key:volume_up"
+    const val VOLUME_DOWN = "key:volume_down"
+    const val VOLUME_MUTE = "key:volume_mute"
     const val EXTRA_ROUTE = "dev.boottv.ROUTE"
     private const val PREFS = "remote_buttons"
 
@@ -36,6 +40,15 @@ object RemoteButtons {
         ButtonAction("Free Movies", Routes.FREE),
         ButtonAction("My Media", Routes.MEDIA),
         ButtonAction("Search", Routes.SEARCH),
+        ButtonAction("Volume up", VOLUME_UP),
+        ButtonAction("Volume down", VOLUME_DOWN),
+        ButtonAction("Mute", VOLUME_MUTE),
+    )
+
+    /** Buttons that come pre-assigned on a fresh install (Xiaomi remote: Netflix and Prime Video as volume). */
+    private val defaults = mapOf(
+        KeyEvent.KEYCODE_BUTTON_6 to ButtonAction("Volume up", VOLUME_UP),
+        KeyEvent.KEYCODE_BUTTON_7 to ButtonAction("Volume down", VOLUME_DOWN),
     )
 
     /** Keys never taken over: navigation, OK, Back, Home, power, volume and the mic. */
@@ -59,7 +72,12 @@ object RemoteButtons {
 
     fun load(context: Context) {
         val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        _mappings.value = p.all.mapNotNull { (k, v) ->
+        if (!p.getBoolean("defaults_applied", false)) {
+            val e = p.edit().putBoolean("defaults_applied", true)
+            defaults.forEach { (code, a) -> if (!p.contains("$code")) e.putString("$code", "${a.label}\u0001${a.route}") }
+            e.apply()
+        }
+        _mappings.value = p.all.filter { it.key != "defaults_applied" }.mapNotNull { (k, v) ->
             val code = k.toIntOrNull() ?: return@mapNotNull null
             val (label, route) = (v as? String)?.split('\u0001')?.takeIf { it.size == 2 } ?: return@mapNotNull null
             code to ButtonAction(label, route)
@@ -77,6 +95,9 @@ object RemoteButtons {
     }
 
     fun keyName(keyCode: Int): String = when (keyCode) {
+        KeyEvent.KEYCODE_BUTTON_6 -> "Netflix button"
+        KeyEvent.KEYCODE_BUTTON_7 -> "Prime Video button"
+        KeyEvent.KEYCODE_BUTTON_4, KeyEvent.KEYCODE_BUTTON_5 -> "Mi button"
         KeyEvent.KEYCODE_PROG_RED -> "red button"
         KeyEvent.KEYCODE_PROG_GREEN -> "green button"
         KeyEvent.KEYCODE_PROG_YELLOW -> "yellow button"
@@ -88,6 +109,14 @@ object RemoteButtons {
         KeyEvent.KEYCODE_ALL_APPS -> "Apps button"
         else -> KeyEvent.keyCodeToString(keyCode).removePrefix("KEYCODE_")
             .split('_').joinToString(" ") { it.lowercase().replaceFirstChar(Char::uppercase) } + " button"
+    }
+
+    /** Volume actions press the system volume key, so the TV (when the remote is set up for it) and the stick both respond. */
+    fun volumeKey(route: String): Int? = when (route) {
+        VOLUME_UP -> KeyEvent.KEYCODE_VOLUME_UP
+        VOLUME_DOWN -> KeyEvent.KEYCODE_VOLUME_DOWN
+        VOLUME_MUTE -> KeyEvent.KEYCODE_VOLUME_MUTE
+        else -> null
     }
 
     /** Brings BootTV to the front on [route]. */
