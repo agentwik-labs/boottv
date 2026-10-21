@@ -73,6 +73,10 @@ fun VideoPlayer(
     error: String?,
     onExit: () -> Unit,
     onCheckpoint: (positionMs: Long, durationMs: Long) -> Unit = { _, _ -> },
+    /** Sees every key first; return true to keep it from the player (an "up next" card taking OK, say). */
+    interceptKey: (android.view.KeyEvent) -> Boolean = { false },
+    /** Drawn over everything, for the caller's own cards. */
+    overlay: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit = {},
 ) {
     var playing by remember { mutableStateOf(false) }
     var buffering by remember { mutableStateOf(true) }
@@ -123,6 +127,7 @@ fun VideoPlayer(
             .onPreviewKeyEvent { ev ->
                 val k = ev.nativeKeyEvent
                 val down = ev.type == KeyEventType.KeyDown
+                if (interceptKey(k)) return@onPreviewKeyEvent true
                 when (k.keyCode) {
                     AndroidKeyEvent.KEYCODE_DPAD_CENTER, AndroidKeyEvent.KEYCODE_ENTER, AndroidKeyEvent.KEYCODE_SPACE,
                     AndroidKeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
@@ -198,5 +203,6 @@ fun VideoPlayer(
                 }
             }
         }
+        overlay()
     }
 }

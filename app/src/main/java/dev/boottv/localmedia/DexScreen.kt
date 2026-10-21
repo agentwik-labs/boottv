@@ -109,7 +109,7 @@ private sealed interface DexSection {
     val title: String
     val type: PokeType
     val sprite: Int
-    data class Videos(override val key: String, override val title: String, override val type: PokeType, val videos: List<LocalVideo>, val folder: String? = null, override val sprite: Int = type.sprite) : DexSection
+    data class Videos(override val key: String, override val title: String, override val type: PokeType, val videos: List<LocalVideo>, val folder: String? = null, override val sprite: Int = type.sprite, val show: Boolean = false) : DexSection
     data class Channels(val channels: List<OnNow>) : DexSection { override val key = "channels"; override val title = "My channels"; override val type = PokeType.ELECTRIC; override val sprite = 479 }
     data class Action(override val key: String, override val title: String, val line: String, val detail: String, override val sprite: Int, val button: String, val onClick: () -> Unit) : DexSection {
         override val type = PokeType.STEEL
@@ -139,7 +139,8 @@ fun MyMediaScreen(nav: NavController) {
         if (existing != null) { nav.navigate("live/play/${MyChannels.ID_PREFIX}${existing.id}"); return }
         status = "Making a channel from $folder…"
         scope.launch {
-            status = runCatching { MyChannels.create(context, MyContent(MyContentKind.DEVICE_FOLDER, folder, folder)) }
+            // A show's channel runs its episodes in order; a folder of films is shuffled once, like a movie channel.
+            status = runCatching { MyChannels.create(context, MyContent(MyContentKind.DEVICE_FOLDER, folder, folder), shuffle = !LocalLibrary.isShow(folder)) }
                 .fold({ "Channel ${it.number} · ${it.name} is on the air! Find it in Live TV and on Home." }, { it.message ?: "Couldn't make that channel." })
         }
     }
@@ -153,12 +154,12 @@ fun MyMediaScreen(nav: NavController) {
     // Dex numbers follow the order videos arrived on the TV, so they never change as more are added.
     val numbers = remember(videos) { videos.sortedWith(compareBy({ it.addedAt }, { it.id })).mapIndexed { i, v -> v.id to i + 1 }.toMap() }
     val folders = LocalLibrary.folders()
-    val resume = LocalProgress.entries.entries.sortedByDescending { it.value.updatedAt }.mapNotNull { LocalLibrary.byId(it.key) }
+    val resume = LocalLibrary.continueWatching()
     val sections = buildList<DexSection> {
         if (resume.isNotEmpty()) add(DexSection.Videos("continue", "Continue watching", PokeType.PSYCHIC, resume, sprite = 143))
         if (myChannels.isNotEmpty()) add(DexSection.Channels(myChannels))
         if (folders.size > 1) add(DexSection.Videos("all", "All videos", PokeType.NORMAL, videos, sprite = 133))
-        folders.forEach { (folder, list) -> add(DexSection.Videos("f:$folder", folder, PokeType.of(folder), list, folder = folder)) }
+        folders.forEach { (folder, list) -> add(DexSection.Videos("f:$folder", folder, PokeType.of(folder), list, folder = folder, show = list.any { it.isEpisode })) }
         add(
             DexSection.Action(
                 "send", "Send from your phone", "Or a computer on the same Wi-Fi",
@@ -305,7 +306,7 @@ private fun SectionLine(s: DexSection, selected: Boolean, modifier: Modifier, on
             Column(Modifier.weight(1f)) {
                 Text(s.title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 val sub = when (s) {
-                    is DexSection.Videos -> "${s.type.label.uppercase()}  ${s.videos.size}"
+                    is DexSection.Videos -> if (s.show) "SERIES  ${s.videos.mapNotNull { it.season }.distinct().size.let { if (it > 1) "$it SEASONS  " else "" }}${s.videos.size} EP" else "${s.type.label.uppercase()}  ${s.videos.size}"
                     is DexSection.Channels -> "${s.channels.size} ON AIR"
                     is DexSection.Action -> s.line.uppercase()
                 }
@@ -328,11 +329,32 @@ private fun VideoGrid(
     onFocused: (LocalVideo) -> Unit,
     onPlay: (LocalVideo) -> Unit,
 ) {
+    // Shows stay in episode order unless another sort is picked; films default to Dex number.
     val sorted = remember(s, sort) {
-        when (sort) {
-            Sort.NUMBER -> if (s.key == "continue") s.videos else s.videos.sortedBy { numbers[it.id] }
-            Sort.NAME -> s.videos.sortedBy { it.title.lowercase() }
-            Sort.NEWEST -> s.videos.sortedByDescending { it.addedAt }
+        when {
+            s.key == "continue" -> s.videos
+            sort == Sort.NAME -> s.videos.sortedBy { it.title.lowercase() }
+            sort == Sort.NEWEST -> s.videos.sortedByDescending { it.addedAt }
+            s.show -> s.videos
+            else -> s.videos.sortedBy { numbers[it.id] }
+        }
+    }
+    val bySeason = remember(sorted) { if (s.show && sort == Sort.NUMBER) sorted.groupBy { it.season } else null }
+    val upNext = remember(s, LocalProgress.entries.size) { if (s.show && s.folder != null) LocalLibrary.upNext(s.folder) else null }
+    Column(Modifier.fillMaxSize()) {
+    // The title and chips stay put; only the entries scroll.
+    Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(10.dp).background(s.type.color, CircleShape))
+        Spacer(Modifier.width(8.dp))
+        Text(s.title.uppercase(), fontFamily = Pixel, fontSize = 11.sp, color = BootColors.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        if (upNext != null) {
+            Chip("▶ " + (if (s.videos.any { LocalProgress.isWatched(it.id) || LocalProgress.entries.containsKey(it.id) }) "CONTINUE ${upNext.episodeLabel}" else "START ${upNext.episodeLabel}"), onClick = { onPlay(upNext) }, accent = true)
+            Spacer(Modifier.width(8.dp))
+        }
+        Chip("SORT ${if (s.show && sort == Sort.NUMBER) "EP" else sort.label}", onClick = onSort)
+        if (s.folder != null) {
+            Spacer(Modifier.width(8.dp))
+            Chip(if (channel != null) "CH ${channel.number} ▶" else "+ CHANNEL", onClick = onChannel, accent = true)
         }
     }
     LazyVerticalGrid(
@@ -341,24 +363,24 @@ private fun VideoGrid(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        item(span = { GridItemSpan(maxLineSpan) }) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(10.dp).background(s.type.color, CircleShape))
-                Spacer(Modifier.width(8.dp))
-                Text(s.title.uppercase(), fontFamily = Pixel, fontSize = 11.sp, color = BootColors.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                Chip("SORT ${sort.label}", onClick = onSort)
-                if (s.folder != null) {
-                    Spacer(Modifier.width(8.dp))
-                    Chip(if (channel != null) "CH ${channel.number} ▶" else "+ CHANNEL", onClick = onChannel, accent = true)
+        if (bySeason != null) {
+            bySeason.forEach { (season, eps) ->
+                if (bySeason.size > 1 || season != null) item(span = { GridItemSpan(maxLineSpan) }, key = "season:$season") {
+                    Text(if (season != null) "SEASON $season" else "EPISODES", fontFamily = Pixel, fontSize = 10.sp, color = s.type.color, modifier = Modifier.padding(top = 6.dp))
+                }
+                items(eps, key = { it.id }) { v ->
+                    VideoCard(v, numbers[v.id] ?: 0, Modifier.onFocusChanged { if (it.isFocused) onFocused(v) }, onClick = { onPlay(v) })
                 }
             }
-        }
-        items(sorted, key = { it.id }) { v ->
-            VideoCard(v, numbers[v.id] ?: 0, Modifier.onFocusChanged { if (it.isFocused) onFocused(v) }, onClick = { onPlay(v) })
+        } else {
+            items(sorted, key = { it.id }) { v ->
+                VideoCard(v, numbers[v.id] ?: 0, Modifier.onFocusChanged { if (it.isFocused) onFocused(v) }, onClick = { onPlay(v) })
+            }
         }
         if (sorted.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) {
             Text("No entries here yet.", color = BootColors.TextSecondary, modifier = Modifier.padding(top = 24.dp))
         }
+    }
     }
 }
 
@@ -389,8 +411,11 @@ private fun VideoCard(v: LocalVideo, number: Int, modifier: Modifier, onClick: (
             Box(Modifier.fillMaxSize()) {
                 JfImage(v.image, Modifier.fillMaxSize())
                 Row(Modifier.align(Alignment.TopStart).padding(6.dp).background(Color(0xAA000000), RoundedCornerShape(4.dp)).padding(horizontal = 5.dp, vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("No.%03d".format(number), color = Color.White, fontFamily = Pixel, fontSize = 8.sp)
+                    Text(if (v.isEpisode) v.episodeLabel else "No.%03d".format(number), color = Color.White, fontFamily = Pixel, fontSize = 8.sp)
                     if (LocalProgress.entries.containsKey(v.id)) { Spacer(Modifier.width(5.dp)); BallEmblem(10.dp) }
+                }
+                if (LocalProgress.isWatched(v.id)) {
+                    Text("✓", color = BootColors.OnFocused, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.TopEnd).padding(6.dp).background(BootColors.Focused, CircleShape).padding(horizontal = 5.dp, vertical = 1.dp))
                 }
                 Text(
                     formatClock(v.durationMs), color = Color.White, fontFamily = Pixel, fontSize = 8.sp,
@@ -464,7 +489,7 @@ private fun StatusStrip(section: DexSection, v: LocalVideo?, c: OnNow?, numbers:
                 val seen = LocalProgress.entries[v.id]
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("No.%03d".format(numbers[v.id] ?: 0), fontFamily = Pixel, fontSize = 10.sp, color = BootColors.TextSecondary)
+                        Text(if (v.isEpisode) v.episodeLabel else "No.%03d".format(numbers[v.id] ?: 0), fontFamily = Pixel, fontSize = 10.sp, color = BootColors.TextSecondary)
                         Spacer(Modifier.width(10.dp))
                         Text(v.title, style = MaterialTheme.typography.titleMedium, color = BootColors.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                         Spacer(Modifier.width(10.dp))
@@ -472,9 +497,9 @@ private fun StatusStrip(section: DexSection, v: LocalVideo?, c: OnNow?, numbers:
                     }
                     Text(
                         listOfNotNull(
-                            v.folder, formatClock(v.durationMs), formatSize(v.sizeBytes),
+                            v.folder, v.subfolder.takeIf { it.isNotEmpty() }, formatClock(v.durationMs), formatSize(v.sizeBytes),
                             "added " + DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(v.addedAt)),
-                            seen?.let { "${(it.fraction * 100).toInt()}% seen" } ?: "not played yet",
+                            seen?.let { "${(it.fraction * 100).toInt()}% seen" } ?: if (LocalProgress.isWatched(v.id)) "watched ✓" else "not played yet",
                         ).joinToString("  ·  "),
                         style = MaterialTheme.typography.bodySmall, color = BootColors.TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )

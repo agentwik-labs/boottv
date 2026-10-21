@@ -80,6 +80,12 @@ import com.google.zxing.qrcode.QRCodeWriter
 import dev.boottv.core.Routes
 import dev.boottv.core.ui.BootButton
 import dev.boottv.core.ui.BootCard
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.draw.clip
+import dev.boottv.core.ui.Pixel
+import dev.boottv.core.ui.gameFrame
 import dev.boottv.core.ui.BootColors
 import dev.boottv.core.ui.pageBackground
 import dev.boottv.core.ui.BootDimens
@@ -205,33 +211,71 @@ private fun qrCode(text: String): ImageBitmap {
 @Composable
 fun LocalPlayerScreen(nav: NavController, id: Long) {
     val context = LocalContext.current
-    val video = remember(id) { LocalLibrary.byId(id) }
+    var currentId by rememberSaveable { mutableLongStateOf(id) }
+    val video = remember(currentId) { LocalLibrary.byId(currentId) }
+    // Netflix-style: when an episode ends, the next one is lined up and starts after a short countdown.
+    var upNext by remember { mutableStateOf<LocalVideo?>(null) }
+    var countdown by remember { mutableIntStateOf(10) }
     val player = remember { ExoPlayer.Builder(context).build() }
+    fun playNext() {
+        val n = upNext ?: return
+        upNext = null
+        currentId = n.id
+    }
     DisposableEffect(player) {
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
-                if (state == Player.STATE_ENDED) { LocalProgress.clear(id); nav.popBackStack() }
+                if (state != Player.STATE_ENDED) return
+                LocalProgress.markWatched(currentId); LocalProgress.clear(currentId)
+                val next = LocalLibrary.nextEpisode(currentId)
+                if (next == null) nav.popBackStack() else { countdown = 10; upNext = next }
             }
         }
         player.addListener(listener)
         onDispose {
             player.removeListener(listener)
-            if (player.playbackState != Player.STATE_ENDED) LocalProgress.save(id, player.currentPosition, player.duration)
+            if (player.playbackState != Player.STATE_ENDED) LocalProgress.save(currentId, player.currentPosition, player.duration)
             player.release()
         }
     }
-    LaunchedEffect(id) {
-        val v = video ?: return@LaunchedEffect
+    LaunchedEffect(currentId) {
+        val v = LocalLibrary.byId(currentId) ?: return@LaunchedEffect
         player.setMediaItem(MediaItem.fromUri(v.uri))
-        LocalProgress.entries[id]?.let { player.seekTo(it.positionMs) }
+        LocalProgress.entries[currentId]?.let { player.seekTo(it.positionMs) }
         player.prepare()
         player.playWhenReady = true
     }
+    LaunchedEffect(upNext) {
+        if (upNext == null) return@LaunchedEffect
+        while (countdown > 0) { delay(1000); countdown-- }
+        playNext()
+    }
     VideoPlayer(
         player = player,
-        title = video?.title.orEmpty(),
+        title = video?.let { if (it.isEpisode) "${it.folder}  ·  ${it.episodeLabel}  ${it.title}" else it.title }.orEmpty(),
         error = if (video == null) "This video isn't on the TV anymore." else null,
         onExit = { nav.popBackStack() },
-        onCheckpoint = { pos, dur -> LocalProgress.save(id, pos, dur) },
-    )
+        onCheckpoint = { pos, dur -> LocalProgress.save(currentId, pos, dur) },
+        interceptKey = { k ->
+            val ok = k.keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER || k.keyCode == android.view.KeyEvent.KEYCODE_ENTER || k.keyCode == android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
+            if (upNext != null && ok) { if (k.action == android.view.KeyEvent.ACTION_DOWN && k.repeatCount == 0) playNext(); true } else false
+        },
+    ) {
+        upNext?.let { n -> UpNextCard(n, countdown, Modifier.align(Alignment.BottomEnd).padding(BootDimens.PagePaddingH, BootDimens.PagePaddingV)) }
+    }
+}
+
+/** "Up next" in the games' message window: picture, episode, countdown. */
+@Composable
+private fun UpNextCard(n: LocalVideo, seconds: Int, modifier: Modifier) {
+    Row(modifier.width(520.dp).gameFrame(BootColors.Surface).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.width(150.dp).aspectRatio(16f / 9f).clip(RoundedCornerShape(6.dp))) { JfImage(n.image, Modifier.fillMaxSize()) }
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text("UP NEXT", fontFamily = Pixel, fontSize = 10.sp, color = BootColors.TextSecondary)
+            Text(listOfNotNull(n.episodeLabel.takeIf { n.isEpisode }, n.title).joinToString("  "), style = MaterialTheme.typography.titleMedium, color = BootColors.TextPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Spacer(Modifier.height(6.dp))
+            Text("Playing in $seconds…   OK play now · Back to stop", style = MaterialTheme.typography.bodySmall, color = BootColors.Focused)
+        }
+    }
 }

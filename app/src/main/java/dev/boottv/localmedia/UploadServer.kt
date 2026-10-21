@@ -153,6 +153,8 @@ object UploadServer {
     private fun receive(req: Request): String {
         val name = LocalLibrary.safeName(req.query["name"].orEmpty())
         val folder = LocalLibrary.safeName(req.query["folder"].orEmpty().ifBlank { "Videos" })
+        // Folders inside the one being sent ("Season 1") are kept, so a show's seasons stay together.
+        val sub = req.query["path"].orEmpty().split('/', '\\').map { it.trim() }.filter { it.isNotEmpty() && it != "." && it != ".." }.joinToString("/") { LocalLibrary.safeName(it) }
         val ext = name.substringAfterLast('.', "").lowercase()
         val total = req.headers["content-length"]?.toLongOrNull() ?: throw UploadException(411, "Missing file size.")
         if (ext !in VIDEO && ext !in IMAGE) throw UploadException(415, "$name isn't a video or a picture BootTV can use.")
@@ -170,7 +172,7 @@ object UploadServer {
                 val dir = LocalLibrary.posterDir(app, folder).apply { mkdirs() }
                 File(dir, name).outputStream().use { copy(req.body, it, total) { n -> progress(n) } }
             } else {
-                saveVideo(name, folder, ext, req.body, total) { n -> progress(n) }
+                saveVideo(name, if (sub.isEmpty()) folder else "$folder/$sub", ext, req.body, total) { n -> progress(n) }
             }
             progress(total, done = true)
             LocalLibrary.refreshSoon(app, 500)
@@ -220,11 +222,12 @@ object UploadServer {
         return runBlocking {
             LocalLibrary.refresh(app)
             val existing = MyChannels.forFolder(folder)
+            val show = LocalLibrary.isShow(folder)
             if (existing != null) {
                 MyChannels.refresh(app, existing.id)
                 """{"ok":true,"message":${json("Channel ${existing.number} · ${existing.name} now includes them.")}}"""
             } else {
-                val ch = runCatching { MyChannels.create(app, MyContent(MyContentKind.DEVICE_FOLDER, folder, folder)) }
+                val ch = runCatching { MyChannels.create(app, MyContent(MyContentKind.DEVICE_FOLDER, folder, folder), shuffle = !show) }
                     .getOrElse { throw UploadException(422, "Saved, but no channel yet: ${it.message} (Videos shorter than a minute aren't used.)") }
                 """{"ok":true,"message":${json("Made channel ${ch.number} · ${ch.name}. It's in Live TV and on Home.")}}"""
             }

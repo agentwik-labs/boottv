@@ -99,7 +99,8 @@ object MyChannels {
     }
 
     /** Creates a channel and fills its line-up. Throws with a readable message when there's nothing to play. */
-    suspend fun create(context: Context, content: MyContent): MyChannel {
+    /** [shuffle] false keeps the line-up in order (a show's episodes). */
+    suspend fun create(context: Context, content: MyContent, shuffle: Boolean = true): MyChannel {
         val items = fetch(context, content)
         if (items.isEmpty()) throw IllegalStateException("Nothing to play in ${content.label} yet.")
         return lock.withLock {
@@ -110,6 +111,7 @@ object MyChannels {
                 name = content.label,
                 number = number,
                 content = content,
+                shuffle = shuffle,
                 epoch = System.currentTimeMillis(),
                 items = items,
                 refreshedAt = System.currentTimeMillis(),
@@ -278,8 +280,12 @@ object MyChannels {
     private suspend fun deviceVideos(context: Context, folder: String?): List<MyItem> =
         LocalLibrary.scan(context)
             .filter { it.durationMs >= 60_000 && (folder == null || it.folder == folder) } // skip clips and samples
-            .sortedBy { it.title.lowercase() }
-            .map { MyItem(ref = it.ref, title = it.title, durationMs = it.durationMs, image = it.image) }
+            .sortedWith(compareBy({ it.folder.lowercase() }, { it.season ?: 0 }, { it.episode ?: 0 }, { it.title.lowercase() }))
+            .map {
+                // Episodes show as "Show" with "S1 E3 · Title" underneath, like a broadcast listing.
+                if (it.isEpisode) MyItem(ref = it.ref, title = it.folder, subtitle = "${it.episodeLabel} · ${it.title}", durationMs = it.durationMs, image = it.image)
+                else MyItem(ref = it.ref, title = it.title, durationMs = it.durationMs, image = it.image)
+            }
 
     /** The channel already made from [folder], if any. */
     fun forFolder(folder: String): MyChannel? =

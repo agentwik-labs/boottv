@@ -56,7 +56,8 @@ internal object UploadPage {
 
   <div class="card">
     <label class="pick" id="pickLabel">Choose videos (and pictures)<input id="files" type="file" multiple accept="video/*,image/*,.mkv,.avi,.ts,.webm"></label>
-    <div class="hint">For a poster, add a picture named like the video (movie.jpg for movie.mp4), or poster.jpg for the whole folder.</div>
+    <label class="pick" id="dirLabel" style="margin-top:10px">Or choose a whole folder: a season or a show<input id="dir" type="file" webkitdirectory multiple></label>
+    <div class="hint">A whole folder keeps its "Season 1", "Season 2" folders. Episodes are recognised from names like S01E03, 1x03 or Episode 3, so the TV plays them in order and one after another. For a poster, add movie.jpg next to movie.mp4, or poster.jpg for the folder.</div>
     <div id="list"></div>
   </div>
 
@@ -67,7 +68,8 @@ internal object UploadPage {
   const ${'$'} = id => document.getElementById(id);
   const code = ${'$'}('code'), folder = ${'$'}('folder'), files = ${'$'}('files'), send = ${'$'}('send'), list = ${'$'}('list'), msg = ${'$'}('msg');
   if (location.hash.length > 1) code.value = location.hash.slice(1, 5);
-  const ready = () => { send.disabled = !(code.value.length === 4 && files.files.length); };
+  let picked = []; // {file, sub}
+  const ready = () => { send.disabled = !(code.value.length === 4 && picked.length); };
   code.oninput = () => { ready(); if (code.value.length === 4) loadFolders(); };
   function loadFolders() {
     fetch('/folders', { headers: { 'X-Code': code.value } }).then(r => r.ok ? r.json() : []).then(fs => {
@@ -76,19 +78,29 @@ internal object UploadPage {
   }
   if (code.value.length === 4) loadFolders();
   const size = n => n > 1e9 ? (n / 1e9).toFixed(1) + ' GB' : (n / 1e6).toFixed(0) + ' MB';
-  files.onchange = () => {
-    ${'$'}('pickLabel').firstChild.textContent = files.files.length + ' file' + (files.files.length === 1 ? '' : 's') + ' chosen (tap to change)';
+  function show(label, other) {
+    ${'$'}(label).firstChild.textContent = picked.length + ' file' + (picked.length === 1 ? '' : 's') + ' chosen (tap to change)';
+    ${'$'}(other).firstChild.textContent = other === 'dirLabel' ? 'Or choose a whole folder: a season or a show' : 'Choose videos (and pictures)';
     list.innerHTML = '';
-    [...files.files].forEach((f, i) => {
-      list.insertAdjacentHTML('beforeend', '<div class="file"><div class="name"><span></span><span id="s' + i + '">' + size(f.size) + '</span></div><div class="bar"><div id="b' + i + '"></div></div></div>');
-      list.lastChild.querySelector('.name span').textContent = f.name;
+    picked.forEach((p, i) => {
+      list.insertAdjacentHTML('beforeend', '<div class="file"><div class="name"><span></span><span id="s' + i + '">' + size(p.file.size) + '</span></div><div class="bar"><div id="b' + i + '"></div></div></div>');
+      list.lastChild.querySelector('.name span').textContent = (p.sub ? p.sub + '/' : '') + p.file.name;
     });
     ready();
+  }
+  files.onchange = () => { picked = [...files.files].map(f => ({ file: f, sub: '' })); show('pickLabel', 'dirLabel'); };
+  ${'$'}('dir').onchange = () => {
+    const all = [...${'$'}('dir').files].filter(f => !f.name.startsWith('.'));
+    // "Pokémon/Season 1/S01E03.mp4": the top folder names the show; what's between goes along as the sub-path.
+    const top = all.length ? (all[0].webkitRelativePath || '').split('/')[0] : '';
+    if (top && !folder.value.trim()) folder.value = top;
+    picked = all.map(f => { const parts = (f.webkitRelativePath || f.name).split('/'); return { file: f, sub: parts.slice(1, -1).join('/') }; });
+    show('dirLabel', 'pickLabel');
   };
   function upload(f, i) {
     return new Promise((resolve, reject) => {
       const x = new XMLHttpRequest();
-      x.open('POST', '/upload?folder=' + encodeURIComponent(folder.value.trim() || 'Videos') + '&name=' + encodeURIComponent(f.name));
+      x.open('POST', '/upload?folder=' + encodeURIComponent(folder.value.trim() || 'Videos') + '&name=' + encodeURIComponent(f.name) + '&path=' + encodeURIComponent(picked[i].sub || ''));
       x.setRequestHeader('X-Code', code.value);
       x.upload.onprogress = e => { if (e.lengthComputable) ${'$'}('b' + i).style.width = (100 * e.loaded / e.total) + '%'; };
       x.onload = () => {
@@ -103,8 +115,8 @@ internal object UploadPage {
   send.onclick = async () => {
     send.disabled = true; msg.textContent = ''; msg.className = '';
     let failed = 0, lastError = '';
-    for (const [i, f] of [...files.files].entries()) {
-      try { await upload(f, i); } catch (e) { failed++; lastError = e; if (String(e).startsWith('Wrong code')) break; }
+    for (const [i, p] of picked.entries()) {
+      try { await upload(p.file, i); } catch (e) { failed++; lastError = e; if (String(e).startsWith('Wrong code')) break; }
     }
     if (failed) { msg.textContent = lastError; msg.className = 'err'; send.disabled = false; return; }
     const done = await fetch('/done?folder=' + encodeURIComponent(folder.value.trim() || 'Videos') + '&channel=' + (${'$'}('channel').checked ? 1 : 0),
