@@ -97,6 +97,19 @@ tools/debloat.sh --restore    # undo everything it did
 If several devices are connected, pass the serial (e.g. `192.168.1.50:5555`) as the
 first argument to `install.sh` / `debloat.sh`.
 
+### Removing other apps
+
+To leave only BootTV and your TV provider's app, uninstall the apps Google/Xiaomi added during setup and disable the
+ones baked into the firmware (they can't be uninstalled, but disabled apps are hidden everywhere and never run):
+
+```bash
+adb -s <serial> uninstall com.tubitv                          # repeat for each added app
+adb -s <serial> shell pm disable-user --user 0 com.netflix.ninja   # repeat for each pre-loaded app
+```
+
+Undo: `adb shell pm enable <package>` for a disabled app, or reinstall from the Play Store for an uninstalled one.
+Keep a log of what you removed (tools/remove-apps-*.log).
+
 ### About debloating
 
 `tools/debloat.sh` only **disables** packages (`pm disable-user`), never uninstalls,
