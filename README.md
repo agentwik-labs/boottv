@@ -119,7 +119,14 @@ exactly that. A factory reset also restores everything.
 source env.sh
 tools/emulator.sh             # boots the BootTV_API34 Android TV AVD, installs, launches
 tools/emulator.sh --headless  # same, without a window
+tools/emulator.sh --restart   # when the emulator window stops taking keyboard/mouse input
+tools/emulator-watch.sh       # leave running in a second terminal: restarts the emulator by itself when that happens
 ```
+
+The Android Emulator's window sometimes goes deaf (keys and clicks stop reaching the TV; its log says
+`skipping QEventPoint ... no target window`). The TV inside is fine. `tools/emulator-watch.sh` watches for that
+line and restarts the emulator; just click the emulator screen once and wait a minute. On a real stick none of this
+applies.
 
 ## Speed
 
