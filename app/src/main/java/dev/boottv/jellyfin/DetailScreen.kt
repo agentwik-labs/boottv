@@ -51,6 +51,7 @@ import androidx.navigation.NavController
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import dev.boottv.core.ui.BootColors
+import dev.boottv.core.ui.pageBackground
 import dev.boottv.core.ui.BootDimens
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -148,7 +149,7 @@ fun DetailScreen(nav: NavController, id: String) {
 
     val item = vm.item
     val client = vm.client
-    Box(Modifier.fillMaxSize().background(BootColors.Background)) {
+    Box(Modifier.fillMaxSize().pageBackground()) {
         when {
             vm.error != null -> CenteredMessage("Couldn't load this title", vm.error) { fr ->
                 JfButton("Retry", Icons.Filled.Refresh, primary = true, onClick = { vm.load(id) }, modifier = Modifier.focusRequester(fr))

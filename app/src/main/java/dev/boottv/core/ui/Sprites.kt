@@ -53,6 +53,9 @@ object Sprites {
     /** The little pixel sprite (96 px, from the games). */
     fun still(id: Int) = "$BASE/$id.png"
 
+    /** Large official-style artwork, for the backdrop. */
+    fun artwork(id: Int) = "$BASE/other/official-artwork/$id.png"
+
     /** Animated battle sprite (Black & White style, Pokédex 1–649); others fall back to the still one. */
     fun animated(id: Int) = if (id in 1..649) "$BASE/versions/generation-v/black-white/animated/$id.gif" else still(id)
 
@@ -174,10 +177,9 @@ fun RowTitle(text: String, modifier: Modifier = Modifier, hint: String? = null) 
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
         if (Sprites.on) {
             // Sprites have empty space around them: let it overlap the row instead of pushing the text.
-            Box(Modifier.size(width = 44.dp, height = 28.dp), contentAlignment = Alignment.Center) {
-                PokeSprite(Sprites.forTitle(text), 72.dp, Modifier.offset(y = (-10).dp))
-            }
-            Spacer(Modifier.width(8.dp))
+            // One fixed slot per title, so every row lines up the same way.
+            Box(Modifier.size(32.dp), contentAlignment = Alignment.Center) { PokeSprite(Sprites.forTitle(text), 48.dp) }
+            Spacer(Modifier.width(6.dp))
         }
         Text(text, style = MaterialTheme.typography.titleMedium, color = BootColors.TextPrimary.copy(alpha = 0.9f))
         if (hint != null) {

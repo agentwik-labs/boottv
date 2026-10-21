@@ -29,6 +29,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.composed
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
@@ -69,6 +72,7 @@ fun BootButton(
     trailing: String? = null,
     onLongClick: (() -> Unit)? = null,
 ) {
+    if (LocalGameMenu.current) { GameMenuButton(text, onClick, modifier, enabled, selected, trailing, onLongClick); return }
     val shape = RoundedCornerShape(12.dp)
     Surface(
         onClick = onClick,
@@ -100,6 +104,33 @@ fun BootButton(
                 Spacer(Modifier.width(12.dp))
                 Text(trailing, style = MaterialTheme.typography.bodyMedium)
             }
+        }
+    }
+}
+
+/** True inside dialogs in the Pokémon themes: buttons become lines of a game menu with a ▶ cursor. */
+val LocalGameMenu = staticCompositionLocalOf { false }
+
+@Composable
+private fun GameMenuButton(text: String, onClick: () -> Unit, modifier: Modifier, enabled: Boolean, selected: Boolean, trailing: String?, onLongClick: (() -> Unit)?) {
+    var focused by remember { mutableStateOf(false) }
+    Surface(
+        onClick = onClick,
+        onLongClick = onLongClick,
+        enabled = enabled,
+        modifier = modifier.onFocusChanged { focused = it.isFocused },
+        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(4.dp)),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = Color.Transparent, contentColor = if (selected) BootColors.Focused else BootColors.TextPrimary,
+            focusedContainerColor = Color.Transparent, focusedContentColor = BootColors.TextPrimary,
+            disabledContainerColor = Color.Transparent, disabledContentColor = BootColors.TextSecondary,
+        ),
+    ) {
+        Row(Modifier.padding(horizontal = 10.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(if (focused) "▶" else " ", fontSize = 13.sp, modifier = Modifier.width(22.dp))
+            Text(text, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f, fill = trailing != null))
+            if (trailing != null) { Spacer(Modifier.width(12.dp)); Text(trailing, style = MaterialTheme.typography.bodyMedium) }
         }
     }
 }
@@ -152,7 +183,7 @@ fun BootDialog(
                 Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = BootColors.TextSecondary)
             }
             Spacer(Modifier.height(6.dp))
-            content()
+            CompositionLocalProvider(LocalGameMenu provides BootColors.theme.playful) { content() }
         }
     }
 }

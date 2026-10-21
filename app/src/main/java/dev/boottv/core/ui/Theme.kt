@@ -103,8 +103,8 @@ object ThemePresets {
         shell = Color(0xFF5B2A86), shellDark = Color(0xFF3A1A5C),
     )
 
-    val all = listOf(Pocket, Gengar, Minimal)
-    val default = Pocket
+    val all = listOf(Gengar, Pocket, Minimal)
+    val default = Gengar
     fun byId(id: String?): ThemePreset = all.firstOrNull { it.id == id } ?: default
 }
 

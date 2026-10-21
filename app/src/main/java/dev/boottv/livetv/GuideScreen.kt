@@ -67,6 +67,7 @@ import androidx.tv.material3.Text
 import coil.compose.AsyncImage
 import dev.boottv.core.Routes
 import dev.boottv.core.ui.BootColors
+import dev.boottv.core.ui.pageBackground
 import dev.boottv.core.ui.BootDimens
 import kotlinx.coroutines.delay
 import java.util.TimeZone
@@ -113,7 +114,7 @@ internal fun buildBlocks(list: List<Programme>, from: Long, to: Long): List<Bloc
 fun GuideScreen(nav: NavController) {
     LaunchedEffect(Unit) { LiveTvRepository.init() }
     val state by LiveTvRepository.state.collectAsState()
-    Box(Modifier.fillMaxSize().background(BootColors.Background)) {
+    Box(Modifier.fillMaxSize().pageBackground()) {
         when {
             !state.loaded -> CenterMessage("Loading Live TV…")
             state.sources.isEmpty() -> NoSources(nav)

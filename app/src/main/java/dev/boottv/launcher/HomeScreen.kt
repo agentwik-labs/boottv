@@ -88,6 +88,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import dev.boottv.core.ui.BootButton
 import dev.boottv.core.ui.BootColors
+import dev.boottv.core.ui.pageBackground
 import dev.boottv.core.ui.BootDialog
 import dev.boottv.core.ui.BootDimens
 import dev.boottv.core.ui.PinPadDialog
@@ -341,7 +342,7 @@ fun HomeScreen(nav: NavController) {
         }
     }
 
-    Box(Modifier.fillMaxSize().background(BootColors.Background).onFocusChanged { homeHasFocus = it.hasFocus }) {
+    Box(Modifier.fillMaxSize().pageBackground().onFocusChanged { homeHasFocus = it.hasFocus }) {
     CompositionLocalProvider(LocalBringIntoViewSpec provides MinimalScrollSpec) {
     // The preview stops (and frees the video decoder) once the page scrolls down to the apps.
     if (showFeed) HomeBackdrop(featured, alpha = 1f - scroll.value / 500f, livePreview = settings?.livePreview == true && scroll.value < 300)
@@ -645,7 +646,7 @@ private fun HomeTopBar(movingLabel: String?, compact: Boolean = false) {
             overflow = TextOverflow.Ellipsis,
         )
         // Your partner Pokémon keeps you company by the clock.
-        PartnerSprite(72.dp, Modifier.padding(end = 12.dp))
+        PartnerSprite(60.dp, Modifier.padding(end = 10.dp))
         Clock()
     }
 }

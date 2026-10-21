@@ -98,6 +98,7 @@ import dev.boottv.core.SearchAction
 import dev.boottv.core.SearchProvider
 import dev.boottv.core.SearchResult
 import dev.boottv.core.ui.BootColors
+import dev.boottv.core.ui.pageBackground
 import dev.boottv.core.ui.BootDimens
 import dev.boottv.jellyfin.CenteredMessage
 import dev.boottv.jellyfin.JfButton
@@ -307,7 +308,7 @@ private fun FreeBrowse(nav: NavController, section: String, badge: String, rows:
         }
     }
 
-    Box(Modifier.fillMaxSize().background(BootColors.Background)) {
+    Box(Modifier.fillMaxSize().pageBackground()) {
         // Banner artwork for the focused card.
         Box(Modifier.align(Alignment.TopEnd).fillMaxWidth(0.62f).height(340.dp)) {
             if (banner.fit) {
@@ -444,7 +445,7 @@ fun FreeDetailScreen(nav: NavController, id: String) {
 private fun FreeDetail(nav: NavController, d: ArchiveDetails) {
     val play = remember { FocusRequester() }
     LaunchedEffect(Unit) { repeat(10) { delay(80); if (runCatching { play.requestFocus() }.isSuccess) return@LaunchedEffect } }
-    Box(Modifier.fillMaxSize().background(BootColors.Background)) {
+    Box(Modifier.fillMaxSize().pageBackground()) {
         Box(Modifier.align(Alignment.TopEnd).fillMaxWidth(0.65f).fillMaxHeight(0.8f)) {
             JfImage(d.item.thumbUrl, Modifier.fillMaxSize(), plain = true)
             Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to BootColors.Background, 0.55f to BootColors.Background.copy(alpha = 0.55f), 1f to Color.Transparent)))

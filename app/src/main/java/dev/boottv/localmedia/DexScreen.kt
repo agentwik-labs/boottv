@@ -4,6 +4,11 @@ import android.Manifest
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -22,6 +27,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -29,16 +38,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.foundation.focusGroup
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -49,24 +61,22 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import androidx.tv.material3.Card
+import androidx.tv.material3.CardDefaults
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import dev.boottv.core.ui.BallEmblem
+import dev.boottv.core.ui.BootCard
 import dev.boottv.core.ui.BootColors
-import dev.boottv.core.ui.Pixel
-import dev.boottv.core.ui.gameFrame
 import dev.boottv.core.ui.BootDimens
+import dev.boottv.core.ui.Pixel
 import dev.boottv.core.ui.PokeSprite
 import dev.boottv.core.ui.PokeType
 import dev.boottv.core.ui.SpriteArt
 import dev.boottv.core.ui.Sprites
+import dev.boottv.core.ui.gameFrame
 import dev.boottv.core.ui.leftToMenu
 import dev.boottv.jellyfin.JellyfinClient
 import dev.boottv.jellyfin.JfImage
@@ -84,25 +94,31 @@ import java.text.DateFormat
 import java.util.Date
 
 /*
- * My Media as a Pokédex: a red hand-held with a lens and three lights, a screen on the left showing the selected
- * entry (picture, number, type, stats, a line of "Dex text"), and the register of entries on the right. Every video
- * on the TV is a numbered entry (No.001 is the first one that arrived); folders are its sections, each with a type.
- * Nothing works differently from before: OK plays, folders become channels, Send to TV and the Mac library are entries.
+ * My Media as a Pokédex, laid out for a library that grows: the hand-held's left screen lists the sections (Continue
+ * watching, My channels, All, then every folder with its type and count) and switches the page as focus moves; the
+ * right screen is a grid of numbered entries for that section, sortable by number, name or newest, with the folder's
+ * channel action at the top and a status strip underneath describing whatever is focused.
  */
 
 private val DexScreenBg = Color(0xFF0E1024)
 private val DexBezel = Color(0xFF2B2D3F)
 
-/** One line of the register. */
-private sealed interface DexEntry {
+/** A page of the Dex. */
+private sealed interface DexSection {
     val key: String
-    data class Action(override val key: String, val title: String, val line: String, val sprite: Int, val onClick: () -> Unit) : DexEntry
-    data class Section(val title: String, val type: PokeType, val count: Int) : DexEntry { override val key = "s:$title" }
-    data class Video(val video: LocalVideo, val number: Int, val type: PokeType) : DexEntry { override val key = "v:${video.id}" }
-    data class Channel(val onNow: OnNow, val type: PokeType) : DexEntry { override val key = "c:${onNow.channel.id}" }
-    data class MakeChannel(val folder: String, val type: PokeType, val channel: MyChannel?) : DexEntry { override val key = "m:$folder" }
+    val title: String
+    val type: PokeType
+    val sprite: Int
+    data class Videos(override val key: String, override val title: String, override val type: PokeType, val videos: List<LocalVideo>, val folder: String? = null, override val sprite: Int = type.sprite) : DexSection
+    data class Channels(val channels: List<OnNow>) : DexSection { override val key = "channels"; override val title = "My channels"; override val type = PokeType.ELECTRIC; override val sprite = 479 }
+    data class Action(override val key: String, override val title: String, val line: String, val detail: String, override val sprite: Int, val button: String, val onClick: () -> Unit) : DexSection {
+        override val type = PokeType.STEEL
+    }
 }
 
+private enum class Sort(val label: String) { NUMBER("No."), NAME("A–Z"), NEWEST("NEW") }
+
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 fun MyMediaScreen(nav: NavController) {
     val context = LocalContext.current
@@ -128,91 +144,119 @@ fun MyMediaScreen(nav: NavController) {
         }
     }
 
+    // Until the first scan has answered there'd be nothing but the two action pages, and focus would settle on them.
+    if (!LocalLibrary.loaded) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { dev.boottv.core.ui.LoadingIndicator("Opening the Dex…") }
+        return
+    }
     val videos = LocalLibrary.videos
-    // Dex numbers: in the order videos arrived on the TV, so they never change as more are added.
+    // Dex numbers follow the order videos arrived on the TV, so they never change as more are added.
     val numbers = remember(videos) { videos.sortedWith(compareBy({ it.addedAt }, { it.id })).mapIndexed { i, v -> v.id to i + 1 }.toMap() }
-    val entries = buildList {
-        add(DexEntry.Action("send", "Send from your phone", "Or a computer, on the same Wi-Fi", 16) { nav.navigate(UPLOAD_ROUTE) })
+    val folders = LocalLibrary.folders()
+    val resume = LocalProgress.entries.entries.sortedByDescending { it.value.updatedAt }.mapNotNull { LocalLibrary.byId(it.key) }
+    val sections = buildList<DexSection> {
+        if (resume.isNotEmpty()) add(DexSection.Videos("continue", "Continue watching", PokeType.PSYCHIC, resume, sprite = 143))
+        if (myChannels.isNotEmpty()) add(DexSection.Channels(myChannels))
+        if (folders.size > 1) add(DexSection.Videos("all", "All videos", PokeType.NORMAL, videos, sprite = 133))
+        folders.forEach { (folder, list) -> add(DexSection.Videos("f:$folder", folder, PokeType.of(folder), list, folder = folder)) }
+        add(
+            DexSection.Action(
+                "send", "Send from your phone", "Or a computer on the same Wi-Fi",
+                "The TV shows an address, a QR code and a 4-digit code. Pick videos in the phone's browser and they register here; a folder can become a channel.",
+                16, "Open Send to TV",
+            ) { nav.navigate(UPLOAD_ROUTE) }
+        )
         if (!LocalLibrary.permitted) add(
-            DexEntry.Action("allow", "Show all videos on this TV", "Videos from LocalSend and USB drives", 164) {
+            DexSection.Action("allow", "Show all videos on this TV", "LocalSend and USB drives", "BootTV needs permission to see videos that other apps saved on this TV.", 164, "Allow") {
                 askPermission.launch(
                     if (Build.VERSION.SDK_INT >= 33) arrayOf(Manifest.permission.READ_MEDIA_VIDEO, Manifest.permission.READ_MEDIA_IMAGES)
                     else arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
                 )
             }
         )
-        add(DexEntry.Action("server", if (hasServer) "Your Mac library" else "Connect your Mac", "Movies and shows from Jellyfin", 137) { nav.navigate(MEDIA_SERVER_ROUTE) })
-        if (myChannels.isNotEmpty()) {
-            add(DexEntry.Section("My channels", PokeType.ELECTRIC, myChannels.size))
-            myChannels.forEach { add(DexEntry.Channel(it, PokeType.of(it.channel.name))) }
-        }
-        val resume = LocalProgress.entries.entries.sortedByDescending { it.value.updatedAt }.mapNotNull { LocalLibrary.byId(it.key) }
-        if (resume.isNotEmpty()) {
-            add(DexEntry.Section("Continue watching", PokeType.PSYCHIC, resume.size))
-            resume.forEach { add(DexEntry.Video(it, numbers.getValue(it.id), PokeType.of(it.folder))) }
-        }
-        LocalLibrary.folders().forEach { (folder, list) ->
-            val type = PokeType.of(folder)
-            add(DexEntry.Section(folder, type, list.size))
-            list.sortedBy { numbers.getValue(it.id) }.forEach { add(DexEntry.Video(it, numbers.getValue(it.id), type)) }
-            add(DexEntry.MakeChannel(folder, type, MyChannels.forFolder(folder)))
-        }
+        add(
+            DexSection.Action(
+                "server", if (hasServer) "Your Mac library" else "Connect your Mac", "Movies and shows from Jellyfin",
+                "Your Mac's movies and shows with artwork, episodes and resume, streamed over Wi-Fi.", 137, if (hasServer) "Open library" else "Set up",
+            ) { nav.navigate(MEDIA_SERVER_ROUTE) }
+        )
     }
-    val selectable = entries.filter { it !is DexEntry.Section }
-    var selected by remember { mutableStateOf<DexEntry?>(null) }
-    if (selected == null || selectable.none { it.key == selected?.key }) selected = selectable.firstOrNull()
+    var currentKey by rememberSaveable { mutableStateOf<String?>(null) }
+    val current = sections.firstOrNull { it.key == currentKey } ?: sections.first()
+    var focusedVideo by remember { mutableStateOf<LocalVideo?>(null) }
+    var focusedChannel by remember { mutableStateOf<OnNow?>(null) }
+    var sort by rememberSaveable { mutableIntStateOf(0) }
 
-    val requesters = remember { mutableMapOf<String, FocusRequester>() }
-    fun requester(k: String) = requesters.getOrPut(k) { FocusRequester() }
-    var landed by remember { mutableStateOf(false) }
-    val firstKey = selectable.firstOrNull()?.key
-    LaunchedEffect(firstKey) {
-        if (firstKey == null) return@LaunchedEffect
-        repeat(15) { delay(100); if (landed) return@LaunchedEffect; runCatching { requester(firstKey).requestFocus() } }
+    val sectionRequesters = remember { mutableMapOf<String, FocusRequester>() }
+    fun sectionRequester(k: String) = sectionRequesters.getOrPut(k) { FocusRequester() }
+    // Coming in from the side menu, focus first lands on whichever section sits level with the rail's My Media entry;
+    // move it to the page we mean to show (the first section, or the one open last time).
+    var focusedKey by remember { mutableStateOf<String?>(null) }
+    // The first focus to land in the list is redirected to the open section if it hit another row.
+    val initialKey = remember { current.key }
+    var redirected by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        val want = current.key
+        repeat(15) { delay(100); if (focusedKey == want) return@LaunchedEffect; runCatching { sectionRequester(want).requestFocus() } }
     }
 
-    // The device: red shell with its lens and lights above two dark panes.
     Column(
-        Modifier.fillMaxSize().background(BootColors.Background)
+        Modifier.fillMaxSize()
             .padding(start = 24.dp, end = BootDimens.PagePaddingH, top = 18.dp, bottom = 18.dp)
             .clip(RoundedCornerShape(22.dp))
             .background(Brush.verticalGradient(listOf(BootColors.theme.shell, BootColors.theme.shellDark)))
             .padding(14.dp),
     ) {
-        DexTop(registered = videos.size)
+        DexTop(seen = videos.size, own = LocalProgress.entries.size)
         Spacer(Modifier.height(12.dp))
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            DexPane(Modifier.weight(0.42f).fillMaxHeight()) { DexDetail(selected, videos.size, status) }
-            DexPane(Modifier.weight(0.58f).fillMaxHeight()) {
-                LazyColumn(contentPadding = PaddingValues(vertical = 10.dp, horizontal = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    items(entries, key = { it.key }) { e ->
-                        if (e is DexEntry.Section) {
-                            SectionLine(e)
-                        } else {
-                            RegisterLine(
-                                e,
-                                modifier = Modifier.leftToMenu().focusRequester(requester(e.key)).onFocusChanged { if (it.isFocused) { selected = e; landed = true } },
-                                onClick = {
-                                    when (e) {
-                                        is DexEntry.Action -> e.onClick()
-                                        is DexEntry.Video -> nav.navigate("media/local/${e.video.id}")
-                                        is DexEntry.Channel -> nav.navigate("live/play/${e.onNow.channel.id}")
-                                        is DexEntry.MakeChannel -> makeChannel(e.folder)
-                                        is DexEntry.Section -> {}
+            // Focus entering the section list (from the side menu, or on arrival) lands on the open section, not on
+            // whichever row happens to sit level with the rail.
+            DexPane(Modifier.width(250.dp).fillMaxHeight().focusProperties { enter = { sectionRequester(current.key) } }.focusGroup()) {
+                LazyColumn(contentPadding = PaddingValues(8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    items(sections, key = { it.key }) { s ->
+                        SectionLine(
+                            s, selected = s.key == current.key,
+                            modifier = Modifier.leftToMenu().focusRequester(sectionRequester(s.key))
+                                .onFocusChanged {
+                                    if (!it.isFocused) return@onFocusChanged
+                                    if (!redirected) {
+                                        redirected = true
+                                        if (s.key != initialKey && runCatching { sectionRequester(initialKey).requestFocus() }.isSuccess) return@onFocusChanged
                                     }
+                                    currentKey = s.key; focusedKey = s.key; focusedVideo = null; focusedChannel = null
                                 },
+                            onClick = { if (s is DexSection.Action) s.onClick() },
+                        )
+                    }
+                }
+            }
+            DexPane(Modifier.weight(1f).fillMaxHeight()) {
+                Column(Modifier.fillMaxSize()) {
+                    Box(Modifier.weight(1f)) {
+                        when (val s = current) {
+                            is DexSection.Videos -> VideoGrid(
+                                s, numbers, Sort.entries[sort],
+                                onSort = { sort = (sort + 1) % Sort.entries.size },
+                                channel = s.folder?.let { MyChannels.forFolder(it) },
+                                onChannel = { s.folder?.let(::makeChannel) },
+                                onFocused = { focusedVideo = it; focusedChannel = null },
+                                onPlay = { nav.navigate("media/local/${it.id}") },
                             )
+                            is DexSection.Channels -> ChannelGrid(s.channels, onFocused = { focusedChannel = it; focusedVideo = null }, onWatch = { nav.navigate("live/play/${it.channel.id}") })
+                            is DexSection.Action -> ActionPage(s)
                         }
                     }
+                    StatusStrip(current, focusedVideo, focusedChannel, numbers, status)
                 }
             }
         }
     }
 }
 
-/** Lens, three lights and the title, like the top of the hand-held. */
+/** Lens, three lights and the counts, like the top of the hand-held. */
 @Composable
-private fun DexTop(registered: Int) {
+private fun DexTop(seen: Int, own: Int) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Canvas(Modifier.size(56.dp)) {
             val r = size.minDimension / 2
@@ -229,10 +273,7 @@ private fun DexTop(registered: Int) {
         Column(horizontalAlignment = Alignment.End) {
             Text("MY MEDIA", color = Color.White, fontFamily = Pixel, fontSize = 20.sp)
             Spacer(Modifier.height(6.dp))
-            Text(
-                if (registered == 0) "NO ENTRIES YET" else "SEEN $registered   OWN ${LocalProgress.entries.size}",
-                color = Color.White.copy(alpha = 0.85f), fontFamily = Pixel, fontSize = 9.sp,
-            )
+            Text(if (seen == 0) "NO ENTRIES YET" else "SEEN $seen   OWN $own", color = Color.White.copy(alpha = 0.85f), fontFamily = Pixel, fontSize = 10.sp)
         }
     }
 }
@@ -240,191 +281,219 @@ private fun DexTop(registered: Int) {
 /** A dark inset screen with a bevel. */
 @Composable
 private fun DexPane(modifier: Modifier, content: @Composable () -> Unit) {
-    Box(
-        modifier.clip(RoundedCornerShape(14.dp)).background(DexBezel).padding(5.dp)
-            .clip(RoundedCornerShape(10.dp)).background(DexScreenBg),
-    ) { content() }
+    Box(modifier.clip(RoundedCornerShape(14.dp)).background(DexBezel).padding(5.dp).clip(RoundedCornerShape(10.dp)).background(DexScreenBg)) { content() }
 }
 
-/** The left screen: what the focused line is, as a Dex entry. */
+/** One section on the left screen: sprite, name, type and count. The focused line gets the ▶ cursor. */
 @Composable
-private fun DexDetail(entry: DexEntry?, registered: Int, status: String?) {
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
-        // Picture with scanlines, like a little CRT.
-        Box(
-            Modifier.fillMaxWidth(0.7f).align(Alignment.CenterHorizontally).aspectRatio(16f / 9f).clip(RoundedCornerShape(8.dp)).background(Color.Black)
-                .drawWithContent {
-                    drawContent()
-                    var y = 0f
-                    while (y < size.height) { drawRect(Color.Black.copy(alpha = 0.18f), topLeft = Offset(0f, y), size = androidx.compose.ui.geometry.Size(size.width, 2f)); y += 5f }
-                },
-        ) {
-            when (entry) {
-                is DexEntry.Video -> JfImage(entry.video.image, Modifier.fillMaxSize())
-                is DexEntry.Channel -> {
-                    val art = entry.onNow.now?.image
-                    if (art != null) JfImage(art, Modifier.fillMaxSize()) else SpriteArt(entry.onNow.channel.name, Modifier.fillMaxSize())
-                }
-                is DexEntry.Action -> Box(Modifier.fillMaxSize().background(BootColors.Surface), contentAlignment = Alignment.Center) { PokeSprite(entry.sprite, 150.dp, animated = true) }
-                is DexEntry.MakeChannel -> Box(Modifier.fillMaxSize().background(entry.type.color.copy(alpha = 0.35f)), contentAlignment = Alignment.Center) { PokeSprite(479, 150.dp, animated = true) }
-                else -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { PokeSprite(Sprites.partner(), 150.dp, animated = true) }
-            }
-        }
-        Spacer(Modifier.height(8.dp))
-        when (entry) {
-            is DexEntry.Video -> {
-                val v = entry.video
-                val seen = LocalProgress.entries[v.id]
-                Text("No.%03d".format(entry.number), color = BootColors.TextSecondary, fontFamily = Pixel, fontSize = 11.sp)
-                Text(v.title, style = MaterialTheme.typography.titleLarge, color = BootColors.TextPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Spacer(Modifier.height(4.dp))
-                TypeBadge(entry.type)
-                Spacer(Modifier.height(6.dp))
-                Row { Column(Modifier.weight(1f)) { Stat("LENGTH", formatClock(v.durationMs)); Stat("ADDED", DateFormat.getDateInstance(DateFormat.SHORT).format(Date(v.addedAt))) }
-                    Column(Modifier.weight(1f)) { Stat("SIZE", formatSize(v.sizeBytes)); Stat("SEEN", seen?.let { "${(it.fraction * 100).toInt()}%" } ?: "Not yet") } }
-                Stat("FOLDER", v.folder)
-                Spacer(Modifier.height(8.dp))
-                DexText(
-                    "A ${lengthWord(v.durationMs)} video kept in ${v.folder}. " +
-                        (if (seen != null) "It was last watched part-way through; OK picks up where it stopped." else "It hasn't been played on this TV yet. OK plays it."),
-                )
-            }
-            is DexEntry.Channel -> {
-                val (ch, now, next) = entry.onNow
-                Text("CHANNEL ${ch.number ?: ""}", color = BootColors.TextSecondary, fontFamily = Pixel, fontSize = 11.sp)
-                Text(ch.name, style = MaterialTheme.typography.titleLarge, color = BootColors.TextPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Spacer(Modifier.height(6.dp))
-                TypeBadge(entry.type)
-                Spacer(Modifier.height(10.dp))
-                Stat("ON NOW", now?.title ?: "—")
-                Stat("NEXT", next?.title ?: "—")
-                Spacer(Modifier.height(10.dp))
-                DexText("One of your own channels. It plays around the clock like regular TV; tuning in joins whatever is on.")
-            }
-            is DexEntry.Action -> {
-                Text(entry.title, style = MaterialTheme.typography.headlineSmall, color = BootColors.TextPrimary)
-                Spacer(Modifier.height(10.dp))
-                DexText(entry.line + ". " + when (entry.key) {
-                    "send" -> "The TV shows an address, a QR code and a 4-digit code; pick videos in your browser and they register here."
-                    "allow" -> "BootTV needs permission to see videos that other apps saved on this TV."
-                    else -> "Your Mac's movies and shows, with artwork and resume, through Jellyfin."
-                })
-            }
-            is DexEntry.MakeChannel -> {
-                val ch = entry.channel
-                Text(if (ch != null) "CHANNEL ${ch.number}" else "NEW CHANNEL", color = BootColors.TextSecondary, fontFamily = Pixel, fontSize = 11.sp)
-                Text(entry.folder, style = MaterialTheme.typography.headlineSmall, color = BootColors.TextPrimary)
-                Spacer(Modifier.height(6.dp))
-                TypeBadge(entry.type)
-                Spacer(Modifier.height(10.dp))
-                DexText(if (ch != null) "This folder is already on the air as channel ${ch.number}. OK tunes in." else "Turns everything in ${entry.folder} into a channel that plays around the clock, in Live TV and on Home.")
-            }
-            else -> {
-                Text("No data", style = MaterialTheme.typography.headlineSmall, color = BootColors.TextPrimary)
-                Spacer(Modifier.height(10.dp))
-                DexText(if (registered == 0) "Nothing is registered yet. Send videos from your phone, copy them over with LocalSend, or plug in a USB drive." else "Move through the register to see each entry.")
-            }
-        }
-        Spacer(Modifier.height(8.dp))
-        status?.let { Text(it, color = BootColors.Focused, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis) }
-    }
-}
-
-@Composable
-private fun TypeBadge(type: PokeType) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            type.label.uppercase(), color = Color.White, fontFamily = Pixel, fontSize = 9.sp,
-            modifier = Modifier.background(type.color, RoundedCornerShape(4.dp)).border(2.dp, Color.White.copy(alpha = 0.6f), RoundedCornerShape(4.dp)).padding(horizontal = 10.dp, vertical = 5.dp),
-        )
-        if (Sprites.on) PokeSprite(type.sprite, 40.dp, Modifier.padding(start = 2.dp))
-    }
-}
-
-@Composable
-private fun Stat(label: String, value: String) {
-    Row(Modifier.padding(vertical = 0.dp)) {
-        Text(label, color = BootColors.TextSecondary, fontFamily = Pixel, fontSize = 8.sp, modifier = Modifier.width(64.dp).padding(top = 3.dp))
-        Text(value, color = BootColors.TextPrimary, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-    }
-}
-
-/** The entry's flavour text, in a bordered box like the games' Dex pages. */
-@Composable
-private fun DexText(text: String) {
-    val blink = rememberInfiniteTransition(label = "cursor").animateFloat(0f, 1f, infiniteRepeatable(tween(500), RepeatMode.Reverse), label = "blink")
-    Box(Modifier.fillMaxWidth().gameFrame().padding(10.dp)) {
-        Text(text, color = BootColors.TextPrimary.copy(alpha = 0.9f), style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(end = 14.dp))
-        Text("▼", color = BootColors.TextPrimary.copy(alpha = if (blink.value > 0.5f) 1f else 0f), fontSize = 10.sp, modifier = Modifier.align(Alignment.BottomEnd))
-    }
-}
-
-@Composable
-private fun SectionLine(s: DexEntry.Section) {
-    Row(Modifier.fillMaxWidth().padding(start = 10.dp, top = 12.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(10.dp).background(s.type.color, CircleShape))
-        Spacer(Modifier.width(8.dp))
-        Text(s.title.uppercase(), color = BootColors.TextSecondary, fontFamily = Pixel, fontSize = 9.sp)
-        Spacer(Modifier.width(10.dp))
-        Text("${s.type.label.uppercase()} ${s.count}", color = s.type.color, fontFamily = Pixel, fontSize = 9.sp)
-    }
-}
-
-/** One line of the register: number, picture or sprite, name. The focused line gets the ▶ cursor. */
-@Composable
-private fun RegisterLine(e: DexEntry, modifier: Modifier, onClick: () -> Unit) {
+private fun SectionLine(s: DexSection, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
-    val shape = RoundedCornerShape(8.dp)
     Surface(
         onClick = onClick,
-        modifier = modifier.fillMaxWidth().height(52.dp).onFocusChanged { focused = it.isFocused },
-        shape = ClickableSurfaceDefaults.shape(shape),
+        modifier = modifier.fillMaxWidth().height(50.dp).onFocusChanged { focused = it.isFocused },
+        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp)),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
         colors = ClickableSurfaceDefaults.colors(
-            containerColor = Color.Transparent, contentColor = BootColors.TextPrimary,
+            containerColor = if (selected) Color.White.copy(alpha = 0.08f) else Color.Transparent, contentColor = BootColors.TextPrimary,
             focusedContainerColor = BootColors.Focused, focusedContentColor = BootColors.OnFocused,
         ),
     ) {
-        Row(Modifier.fillMaxSize().padding(start = 8.dp, end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(if (focused) "▶" else " ", fontSize = 12.sp, modifier = Modifier.width(16.dp))
-            when (e) {
-                is DexEntry.Video -> {
-                    Column(Modifier.width(58.dp)) {
-                        Text("No.%03d".format(e.number), fontFamily = Pixel, fontSize = 8.sp)
-                        if (LocalProgress.entries.containsKey(e.video.id)) BallEmblem(12.dp, Modifier.padding(top = 3.dp))
-                    }
-                    Box(Modifier.width(64.dp).height(36.dp).clip(RoundedCornerShape(4.dp))) { JfImage(e.video.image, Modifier.fillMaxSize()) }
-                    Spacer(Modifier.width(12.dp))
-                    Text(e.video.title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                    Text(formatClock(e.video.durationMs), fontFamily = Pixel, fontSize = 8.sp, modifier = Modifier.padding(start = 8.dp))
+        Row(Modifier.fillMaxSize().padding(start = 6.dp, end = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(if (focused) "▶" else " ", fontSize = 12.sp, modifier = Modifier.width(14.dp))
+            Box(Modifier.size(34.dp), contentAlignment = Alignment.Center) { if (Sprites.on) PokeSprite(s.sprite, 44.dp) else Box(Modifier.size(10.dp).background(s.type.color, CircleShape)) }
+            Spacer(Modifier.width(8.dp))
+            Column(Modifier.weight(1f)) {
+                Text(s.title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                val sub = when (s) {
+                    is DexSection.Videos -> "${s.type.label.uppercase()}  ${s.videos.size}"
+                    is DexSection.Channels -> "${s.channels.size} ON AIR"
+                    is DexSection.Action -> s.line.uppercase()
                 }
-                is DexEntry.Channel -> {
-                    Text("CH ${e.onNow.channel.number ?: ""}", fontFamily = Pixel, fontSize = 8.sp, modifier = Modifier.width(58.dp))
-                    Box(Modifier.width(64.dp).height(36.dp).clip(RoundedCornerShape(4.dp))) {
-                        val art = e.onNow.now?.image
-                        if (art != null) JfImage(art, Modifier.fillMaxSize()) else SpriteArt(e.onNow.channel.name, Modifier.fillMaxSize())
-                    }
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(e.onNow.channel.name, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(e.onNow.now?.title ?: "", fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                    Text("LIVE", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.background(BootColors.Live, RoundedCornerShape(3.dp)).padding(horizontal = 5.dp, vertical = 1.dp))
-                }
-                is DexEntry.Action -> {
-                    Box(Modifier.width(54.dp), contentAlignment = Alignment.Center) { if (Sprites.on) PokeSprite(e.sprite, 48.dp) }
-                    Column(Modifier.weight(1f)) {
-                        Text(e.title, style = MaterialTheme.typography.bodyLarge, maxLines = 1)
-                        Text(e.line, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                }
-                is DexEntry.MakeChannel -> {
-                    Box(Modifier.width(54.dp), contentAlignment = Alignment.Center) { if (Sprites.on) PokeSprite(479, 44.dp) else Text("TV", fontWeight = FontWeight.Bold) }
-                    Text(if (e.channel != null) "Watch channel ${e.channel.number}" else "Make ${e.folder} a channel", style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                }
-                is DexEntry.Section -> {}
+                Text(sub, fontFamily = Pixel, fontSize = 7.sp, color = if (focused) BootColors.OnFocused.copy(alpha = 0.7f) else s.type.color, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
+    }
+}
+
+// ---------------------------------------------------------------------------- right screen
+
+@Composable
+private fun VideoGrid(
+    s: DexSection.Videos,
+    numbers: Map<Long, Int>,
+    sort: Sort,
+    onSort: () -> Unit,
+    channel: MyChannel?,
+    onChannel: () -> Unit,
+    onFocused: (LocalVideo) -> Unit,
+    onPlay: (LocalVideo) -> Unit,
+) {
+    val sorted = remember(s, sort) {
+        when (sort) {
+            Sort.NUMBER -> if (s.key == "continue") s.videos else s.videos.sortedBy { numbers[it.id] }
+            Sort.NAME -> s.videos.sortedBy { it.title.lowercase() }
+            Sort.NEWEST -> s.videos.sortedByDescending { it.addedAt }
+        }
+    }
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(3),
+        contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(10.dp).background(s.type.color, CircleShape))
+                Spacer(Modifier.width(8.dp))
+                Text(s.title.uppercase(), fontFamily = Pixel, fontSize = 11.sp, color = BootColors.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                Chip("SORT ${sort.label}", onClick = onSort)
+                if (s.folder != null) {
+                    Spacer(Modifier.width(8.dp))
+                    Chip(if (channel != null) "CH ${channel.number} ▶" else "+ CHANNEL", onClick = onChannel, accent = true)
+                }
+            }
+        }
+        items(sorted, key = { it.id }) { v ->
+            VideoCard(v, numbers[v.id] ?: 0, Modifier.onFocusChanged { if (it.isFocused) onFocused(v) }, onClick = { onPlay(v) })
+        }
+        if (sorted.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) {
+            Text("No entries here yet.", color = BootColors.TextSecondary, modifier = Modifier.padding(top = 24.dp))
+        }
+    }
+}
+
+@Composable
+private fun Chip(text: String, onClick: () -> Unit, accent: Boolean = false) {
+    Surface(
+        onClick = onClick,
+        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(6.dp)),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.04f),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = if (accent) BootColors.Accent.copy(alpha = 0.35f) else Color.White.copy(alpha = 0.08f), contentColor = BootColors.TextPrimary,
+            focusedContainerColor = BootColors.Focused, focusedContentColor = BootColors.OnFocused,
+        ),
+    ) {
+        Text(text, fontFamily = Pixel, fontSize = 9.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp))
+    }
+}
+
+@Composable
+private fun VideoCard(v: LocalVideo, number: Int, modifier: Modifier, onClick: () -> Unit) {
+    Column {
+        Card(
+            onClick = onClick,
+            modifier = modifier.fillMaxWidth().aspectRatio(16f / 9f),
+            shape = CardDefaults.shape(RoundedCornerShape(8.dp)),
+            scale = BootCard.scale, border = BootCard.border, glow = BootCard.glow,
+        ) {
+            Box(Modifier.fillMaxSize()) {
+                JfImage(v.image, Modifier.fillMaxSize())
+                Row(Modifier.align(Alignment.TopStart).padding(6.dp).background(Color(0xAA000000), RoundedCornerShape(4.dp)).padding(horizontal = 5.dp, vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("No.%03d".format(number), color = Color.White, fontFamily = Pixel, fontSize = 8.sp)
+                    if (LocalProgress.entries.containsKey(v.id)) { Spacer(Modifier.width(5.dp)); BallEmblem(10.dp) }
+                }
+                Text(
+                    formatClock(v.durationMs), color = Color.White, fontFamily = Pixel, fontSize = 8.sp,
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp).background(Color(0xAA000000), RoundedCornerShape(4.dp)).padding(horizontal = 5.dp, vertical = 3.dp),
+                )
+                LocalProgress.entries[v.id]?.let { p ->
+                    Box(Modifier.align(Alignment.BottomStart).fillMaxWidth(0.7f).padding(8.dp).height(3.dp).background(Color(0x66FFFFFF), RoundedCornerShape(2.dp))) {
+                        Box(Modifier.fillMaxHeight().fillMaxWidth(p.fraction).background(BootColors.Focused, RoundedCornerShape(2.dp)))
+                    }
+                }
+            }
+        }
+        Text(v.title, style = MaterialTheme.typography.bodySmall, color = BootColors.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp, start = 2.dp))
+    }
+}
+
+@Composable
+private fun ChannelGrid(channels: List<OnNow>, onFocused: (OnNow) -> Unit, onWatch: (OnNow) -> Unit) {
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(3),
+        contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            Text("MY CHANNELS · ON AIR NOW", fontFamily = Pixel, fontSize = 11.sp, color = BootColors.TextPrimary)
+        }
+        items(channels, key = { it.channel.id }) { c ->
+            Column {
+                Card(
+                    onClick = { onWatch(c) },
+                    modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f).onFocusChanged { if (it.isFocused) onFocused(c) },
+                    shape = CardDefaults.shape(RoundedCornerShape(8.dp)),
+                    scale = BootCard.scale, border = BootCard.border, glow = BootCard.glow,
+                ) {
+                    Box(Modifier.fillMaxSize()) {
+                        val art = c.now?.image
+                        if (art != null) JfImage(art, Modifier.fillMaxSize()) else SpriteArt(c.channel.name, Modifier.fillMaxSize())
+                        Text("CH ${c.channel.number ?: ""}", color = Color.White, fontFamily = Pixel, fontSize = 8.sp, modifier = Modifier.align(Alignment.TopStart).padding(6.dp).background(Color(0xAA000000), RoundedCornerShape(4.dp)).padding(horizontal = 5.dp, vertical = 3.dp))
+                        Text("LIVE", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.TopEnd).padding(6.dp).background(BootColors.Live, RoundedCornerShape(3.dp)).padding(horizontal = 5.dp, vertical = 1.dp))
+                    }
+                }
+                Text(c.channel.name, style = MaterialTheme.typography.bodySmall, color = BootColors.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp, start = 2.dp))
+            }
+        }
+    }
+}
+
+/** A section that does something (Send to TV, Mac library): the explanation and one button. */
+@Composable
+private fun ActionPage(s: DexSection.Action) {
+    Column(Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        if (Sprites.on) PokeSprite(s.sprite, 140.dp, animated = true)
+        Text(s.title, style = MaterialTheme.typography.headlineSmall, color = BootColors.TextPrimary)
+        Spacer(Modifier.height(10.dp))
+        Text(s.detail, style = MaterialTheme.typography.bodyMedium, color = BootColors.TextSecondary, modifier = Modifier.width(460.dp))
+        Spacer(Modifier.height(18.dp))
+        Box(Modifier.height(44.dp)) { Chip(s.button.uppercase(), onClick = s.onClick, accent = true) }
+    }
+}
+
+/** Under the grid: what the focused entry is, as a Dex line. */
+@Composable
+private fun StatusStrip(section: DexSection, v: LocalVideo?, c: OnNow?, numbers: Map<Long, Int>, status: String?) {
+    val blink = rememberInfiniteTransition(label = "cursor").animateFloat(0f, 1f, infiniteRepeatable(tween(500), RepeatMode.Reverse), label = "blink")
+    Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, bottom = 10.dp).gameFrame().padding(horizontal = 12.dp, vertical = 8.dp).height(52.dp), verticalAlignment = Alignment.CenterVertically) {
+        when {
+            status != null -> Text(status, color = BootColors.Focused, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            v != null -> {
+                val type = PokeType.of(v.folder)
+                val seen = LocalProgress.entries[v.id]
+                Column(Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("No.%03d".format(numbers[v.id] ?: 0), fontFamily = Pixel, fontSize = 10.sp, color = BootColors.TextSecondary)
+                        Spacer(Modifier.width(10.dp))
+                        Text(v.title, style = MaterialTheme.typography.titleMedium, color = BootColors.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                        Spacer(Modifier.width(10.dp))
+                        Text(type.label.uppercase(), color = Color.White, fontFamily = Pixel, fontSize = 7.sp, modifier = Modifier.background(type.color, RoundedCornerShape(3.dp)).padding(horizontal = 6.dp, vertical = 3.dp))
+                    }
+                    Text(
+                        listOfNotNull(
+                            v.folder, formatClock(v.durationMs), formatSize(v.sizeBytes),
+                            "added " + DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(v.addedAt)),
+                            seen?.let { "${(it.fraction * 100).toInt()}% seen" } ?: "not played yet",
+                        ).joinToString("  ·  "),
+                        style = MaterialTheme.typography.bodySmall, color = BootColors.TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            c != null -> Column(Modifier.weight(1f)) {
+                Text("CH ${c.channel.number ?: ""}  ${c.channel.name}", style = MaterialTheme.typography.titleMedium, color = BootColors.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(listOfNotNull(c.now?.let { "On now: ${it.title}" }, c.next?.let { "Next: ${it.title}" }).joinToString("  ·  "), style = MaterialTheme.typography.bodySmall, color = BootColors.TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            else -> Text(
+                when (section) {
+                    is DexSection.Videos -> if (section.folder != null) "${section.videos.size} entr${if (section.videos.size == 1) "y" else "ies"} in ${section.title}. ▶ to browse, OK plays, + CHANNEL puts the folder on the air." else "${section.videos.size} entries. ▶ to browse; OK plays."
+                    is DexSection.Channels -> "Your own channels play around the clock. ▶ then OK tunes in."
+                    is DexSection.Action -> section.line
+                },
+                style = MaterialTheme.typography.bodyMedium, color = BootColors.TextPrimary.copy(alpha = 0.85f), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+            )
+        }
+        Text("▼", color = BootColors.TextPrimary.copy(alpha = if (blink.value > 0.5f) 1f else 0f), fontSize = 10.sp, modifier = Modifier.padding(start = 8.dp).align(Alignment.Bottom))
     }
 }
 
@@ -432,14 +501,4 @@ private fun formatSize(bytes: Long): String = when {
     bytes >= 1_000_000_000 -> "%.1f GB".format(bytes / 1e9)
     bytes >= 1_000_000 -> "%d MB".format(bytes / 1_000_000)
     else -> "%d KB".format(bytes / 1000)
-}
-
-private fun lengthWord(ms: Long): String {
-    val min = ms / 60_000
-    return when {
-        min < 2 -> "short"
-        min < 20 -> "$min-minute"
-        min < 60 -> "$min-minute"
-        else -> "%d h %02d min".format(min / 60, min % 60)
-    }
 }

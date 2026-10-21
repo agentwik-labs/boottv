@@ -40,6 +40,7 @@ import dev.boottv.core.Routes
 import dev.boottv.core.ui.BootColors
 import dev.boottv.core.ui.BootDimens
 import dev.boottv.core.ui.BootMenuItems
+import dev.boottv.core.ui.ThemeBackdrop
 import dev.boottv.core.ui.BootTheme
 import dev.boottv.core.ui.SideMenu
 import dev.boottv.jellyfin.jellyfinGraph
@@ -119,6 +120,7 @@ class MainActivity : ComponentActivity() {
                         .fillMaxSize()
                         .background(BootColors.Background),
                 ) {
+                    if (BootColors.theme.playful) ThemeBackdrop()
                     Box(
                         Modifier
                             .fillMaxSize()

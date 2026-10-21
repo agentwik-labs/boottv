@@ -31,7 +31,7 @@ data class BootSettings(
     /** Home plays the focused live channel, muted, behind the banner. */
     val livePreview: Boolean = true,
     val accentId: String = "blue",
-    val themeId: String = "pocket",
+    val themeId: String = "gengar",
     /** Pokémon sprites in the Pocket Monsters theme (downloaded on the TV, never bundled). */
     val sprites: Boolean = true,
     /** National Pokédex number of the partner shown in the top bar; 0 = a different one each day, -1 = the theme's. */
@@ -69,7 +69,7 @@ object BootPrefs {
         showFavorites = this[SHOW_FAVORITES] ?: true,
         livePreview = this[LIVE_PREVIEW] ?: true,
         accentId = this[ACCENT] ?: "blue",
-        themeId = this[THEME] ?: "pocket",
+        themeId = this[THEME] ?: "gengar",
         sprites = this[SPRITES] ?: true,
         partner = this[PARTNER] ?: -1,
         pinHash = this[PIN],

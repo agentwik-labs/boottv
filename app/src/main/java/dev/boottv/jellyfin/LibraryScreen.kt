@@ -36,6 +36,7 @@ import androidx.navigation.NavController
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import dev.boottv.core.ui.BootColors
+import dev.boottv.core.ui.pageBackground
 import dev.boottv.core.ui.BootDimens
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -147,7 +148,7 @@ fun LibraryScreen(nav: NavController, id: String) {
         }
     }
 
-    Column(Modifier.fillMaxSize().background(BootColors.Background)) {
+    Column(Modifier.fillMaxSize().pageBackground()) {
         Row(
             Modifier.fillMaxWidth().padding(start = BootDimens.PagePaddingH, end = BootDimens.PagePaddingH, top = BootDimens.PagePaddingV, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically,

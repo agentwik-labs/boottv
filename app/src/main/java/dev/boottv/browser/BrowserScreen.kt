@@ -102,6 +102,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import dev.boottv.core.Routes
 import dev.boottv.core.ui.BootColors
+import dev.boottv.core.ui.pageBackground
 import dev.boottv.core.ui.BootDimens
 import dev.boottv.core.ui.BootTheme
 import kotlinx.coroutines.delay
@@ -419,7 +420,7 @@ private fun StartPage(state: BrowserState, bookmarks: List<Bookmark>, history: L
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(BootColors.Background),
+            .pageBackground(),
         contentPadding = PaddingValues(
             start = BootDimens.PagePaddingH, end = BootDimens.PagePaddingH,
             top = 110.dp, bottom = BootDimens.PagePaddingV,

@@ -48,6 +48,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import dev.boottv.core.Routes
 import dev.boottv.core.ui.BootColors
+import dev.boottv.core.ui.pageBackground
 import dev.boottv.core.ui.BootDimens
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -139,7 +140,7 @@ fun BrowseScreen(nav: NavController) {
     val vm: BrowseViewModel = viewModel()
     LaunchedEffect(Unit) { vm.refresh() }
 
-    Box(Modifier.fillMaxSize().background(BootColors.Background)) {
+    Box(Modifier.fillMaxSize().pageBackground()) {
         when (val s = vm.state) {
             BrowseState.Loading -> LoadingMessage("Loading your media…")
             BrowseState.NotConfigured -> NotConfiguredState(nav)

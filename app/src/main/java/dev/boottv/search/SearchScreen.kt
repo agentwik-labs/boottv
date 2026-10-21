@@ -94,6 +94,7 @@ import dev.boottv.core.SearchProvider
 import dev.boottv.core.SearchRegistry
 import dev.boottv.core.SearchResult
 import dev.boottv.core.ui.BootColors
+import dev.boottv.core.ui.pageBackground
 import dev.boottv.core.ui.BootDimens
 import dev.boottv.core.ui.BootTheme
 import kotlinx.coroutines.CancellationException
@@ -205,7 +206,7 @@ private fun SearchContent(nav: NavController) {
     Row(
         Modifier
             .fillMaxSize()
-            .background(BootColors.Background)
+            .pageBackground()
             .padding(horizontal = BootDimens.PagePaddingH, vertical = BootDimens.PagePaddingV)
             .onPreviewKeyEvent { e ->
                 if (editing) return@onPreviewKeyEvent false

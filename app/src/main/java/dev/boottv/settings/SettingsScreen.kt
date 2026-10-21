@@ -83,6 +83,7 @@ import dev.boottv.BuildConfig
 import dev.boottv.core.ui.AccentPresets
 import dev.boottv.core.ui.BootButton
 import dev.boottv.core.ui.BootColors
+import dev.boottv.core.ui.pageBackground
 import dev.boottv.core.ui.BootDimens
 import dev.boottv.core.ui.PinPadDialog
 import dev.boottv.core.ui.PinSetupDialog
@@ -117,12 +118,12 @@ fun SettingsScreen(nav: NavController) {
     var unlocked by rememberSaveable { mutableStateOf(false) }
 
     val s = settings ?: run {
-        Box(Modifier.fillMaxSize().background(BootColors.Background))
+        Box(Modifier.fillMaxSize().pageBackground())
         return
     }
 
     if (s.pinForSettings && s.hasPin && !unlocked) {
-        Box(Modifier.fillMaxSize().background(BootColors.Background), contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxSize().pageBackground(), contentAlignment = Alignment.Center) {
             Text("Settings are locked", color = BootColors.TextSecondary)
         }
         PinPadDialog(
@@ -151,7 +152,7 @@ private fun SettingsContent(s: BootSettings) {
     Row(
         Modifier
             .fillMaxSize()
-            .background(BootColors.Background)
+            .pageBackground()
             .padding(vertical = BootDimens.PagePaddingV),
     ) {
         // Categories (left pane). Focusing a category shows its details on the right, like Roku.

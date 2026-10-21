@@ -190,13 +190,17 @@ private fun SideMenuEntry(
         ),
     ) {
         Row(
-            Modifier.fillMaxHeight().padding(horizontal = 14.dp),
+            Modifier.fillMaxHeight().padding(horizontal = if (Sprites.on) 8.dp else 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (Sprites.on) {
                 // The sprite's own canvas has a lot of empty space: draw it larger than its slot, centred.
-                Box(Modifier.size(22.dp), contentAlignment = Alignment.Center) {
-                    PokeSprite(if (item.route == Routes.HOME) Sprites.partner() else item.sprite, if (focused) 72.dp else 64.dp, animated = focused)
+                // Every sprite in the same round slot, so the rail reads as a column of icons.
+                Box(
+                    Modifier.size(34.dp).background(if (focused) BootColors.OnFocused.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.07f), RoundedCornerShape(50)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    PokeSprite(if (item.route == Routes.HOME) Sprites.partner() else item.sprite, 50.dp, animated = focused)
                 }
             } else {
                 Icon(item.icon, contentDescription = item.label, modifier = Modifier.size(22.dp))

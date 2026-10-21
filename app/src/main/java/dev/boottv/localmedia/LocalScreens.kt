@@ -81,6 +81,7 @@ import dev.boottv.core.Routes
 import dev.boottv.core.ui.BootButton
 import dev.boottv.core.ui.BootCard
 import dev.boottv.core.ui.BootColors
+import dev.boottv.core.ui.pageBackground
 import dev.boottv.core.ui.BootDimens
 import dev.boottv.core.ui.PokeSprite
 import dev.boottv.core.ui.RowTitle
@@ -127,7 +128,7 @@ fun UploadScreen(onDone: () -> Unit) {
     val link = state.address?.let { "$it/#${state.code}" }
     val qr = remember(link) { link?.let { qrCode(it) } }
 
-    Box(Modifier.fillMaxSize().background(BootColors.Background).padding(horizontal = BootDimens.PagePaddingH, vertical = BootDimens.PagePaddingV)) {
+    Box(Modifier.fillMaxSize().pageBackground().padding(horizontal = BootDimens.PagePaddingH, vertical = BootDimens.PagePaddingV)) {
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(48.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
