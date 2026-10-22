@@ -178,6 +178,8 @@ WebM and TS usually do too.
    stick has about 5 GB free (a few seasons at phone quality), so this holds favourites rather than a whole library.
 2. **Send to TV** (My Media › Send from your phone): any phone or computer on the Wi-Fi uploads videos or a whole
    folder from its browser, no debugging connection needed.
+   From a terminal (or a coding agent, see [AGENTS.md](AGENTS.md)):
+   `tools/send.sh <address> <code> ~/Videos/BootTV/Bluey --channel` sends folders and makes them channels.
 3. **Cloud library** (no computer has to stay on): put the folder in a bucket and let the TV stream from it.
    ```bash
    brew install ffmpeg rclone                       # ffprobe reads durations; rclone uploads
